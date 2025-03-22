@@ -1,13 +1,13 @@
-import { ScrollView } from 'react-native'
 import { NavigationContainer } from '@react-navigation/native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import Index from './app/index'
 
 export default function App() {
   return (
-    <ScrollView>
+    <SafeAreaProvider>
       <NavigationContainer>
         <Index />
       </NavigationContainer>
-    </ScrollView>
+    </SafeAreaProvider>
   )
 }

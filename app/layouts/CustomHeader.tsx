@@ -36,7 +36,7 @@ export default function CustomHeader({ name }: HeaderProps) {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: 10,
-        backgroundColor: '#007AFF',
+        backgroundColor: '#2196F3',
       }}
     >
       <View
