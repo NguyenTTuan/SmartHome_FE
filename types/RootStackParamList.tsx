@@ -4,5 +4,6 @@ export type RootStackParamList = {
   Devices: undefined
   Cameras: undefined
   Notifications: undefined
+  Settings: undefined
   AboutUs: undefined
 }

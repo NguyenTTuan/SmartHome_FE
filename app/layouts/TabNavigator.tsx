@@ -4,11 +4,12 @@ import Home from './../Home'
 import Devices from './../Devices'
 import Cameras from './../Cameras'
 import Notifications from './../Notifications'
-import AboutUs from './../AboutUs'
+import Settings from './../Settings'
 import CustomHeader from './CustomHeader'
+import { RootStackParamList } from '../../types/RootStackParamList'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 
-const Tab = createBottomTabNavigator()
+const Tab = createBottomTabNavigator<RootStackParamList>()
 
 const TabNavigator = () => {
   return (
@@ -32,10 +33,8 @@ const TabNavigator = () => {
             )
           else if (route.name === 'Notifications')
             return <Ionicons name="notifications" size={size} color={color} />
-          else if (route.name === 'AboutUs')
-            return (
-              <Ionicons name="information-circle" size={size} color={color} />
-            )
+          else if (route.name === 'Settings')
+            return <Ionicons name="settings" size={size} color={color} />
         },
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: 'gray',
@@ -62,6 +61,11 @@ const TabNavigator = () => {
         name="Notifications"
         component={Notifications}
         options={{ title: 'Thông báo' }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={Settings}
+        options={{ title: 'Cài đặt' }}
       />
     </Tab.Navigator>
   )
