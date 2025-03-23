@@ -25,6 +25,8 @@ export default function CustomHeader({ name }: HeaderProps) {
       return <Ionicons name="notifications" size={size} color={color} />
     } else if (name === 'AboutUs') {
       return <Ionicons name="information-circle" size={size} color={color} />
+    } else if (name === 'Settings') {
+      return <Ionicons name="settings" size={size} color={color} />
     }
     return null
   }
