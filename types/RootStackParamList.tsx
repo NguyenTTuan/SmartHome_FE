@@ -6,4 +6,5 @@ export type RootStackParamList = {
   Notifications: undefined
   Settings: undefined
   AboutUs: undefined
+  RoomDetail: { room: string }
 }

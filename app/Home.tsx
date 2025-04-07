@@ -55,6 +55,10 @@ const fakeDevices = [
       { id: 6, name: 'Refrigerator', isOn: true },
       { id: 7, name: 'Oven', isOn: false },
       { id: 8, name: 'Coffee Maker', isOn: false },
+      { id: 9, name: 'Coffee Maker', isOn: false },
+      { id: 10, name: 'Coffee Maker', isOn: false },
+      { id: 11, name: 'Coffee Maker', isOn: false },
+      { id: 12, name: 'Coffee Maker', isOn: false },
     ],
   },
 ]
