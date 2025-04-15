@@ -6,10 +6,10 @@ import Cameras from './../Cameras'
 import Notifications from './../Notifications'
 import Settings from './../Settings'
 import CustomHeader from './CustomHeader'
-import { RootStackParamList } from '../../types/RootStackParamList'
+import { TabNavigatorParamList } from '../../types/TabNavigatorParamList'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 
-const Tab = createBottomTabNavigator<RootStackParamList>()
+const Tab = createBottomTabNavigator<TabNavigatorParamList>()
 
 const TabNavigator = () => {
   return (

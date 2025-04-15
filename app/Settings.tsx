@@ -1,16 +1,24 @@
 import { Text, View, Button } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { RootStackParamList } from '../types/RootStackParamList'
+import { TabNavigatorParamList } from '../types/TabNavigatorParamList'
+import { useAuth } from './contexts/AuthContext'
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Settings'>
+export default function Settings() {
+  const { logout } = useAuth()
 
-export default function Devices() {
-  const navigation = useNavigation<NavigationProp>()
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch (error) {
+      console.error('Logout failed:', error)
+    }
+  }
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
       <Text>Settings Page</Text>
+      <Button title="Đăng xuất" onPress={handleLogout} />
     </View>
   )
 }

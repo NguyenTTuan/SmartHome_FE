@@ -1,14 +1,16 @@
 import { View, StatusBar } from 'react-native'
 import VoiceChat from '../components/VoiceChat'
+import { NavigationContainer } from '@react-navigation/native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import RootStack from './layouts/RootStack'
+import { AuthProvider } from './contexts/AuthContext'
 
-const Index = () => {
+export default function App() {
   return (
-    <View style={{ flex: 1 }}>
+    <AuthProvider>
       <StatusBar barStyle="default" backgroundColor="#2196F3" />
       <RootStack />
-      <VoiceChat />
-    </View>
+      {/* <VoiceChat /> */}
+    </AuthProvider>
   )
 }
-export default Index
