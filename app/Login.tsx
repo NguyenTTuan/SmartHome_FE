@@ -30,7 +30,6 @@ export default function Login() {
       try {
         await login(username, password)
       } catch (e) {
-        console.log(e)
         Alert.alert('Lỗi', 'Đăng nhập thất bại')
       }
     }
@@ -69,6 +68,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+    backgroundColor: '#F9FAFC',
   },
   logo: {
     width: 150,

@@ -55,6 +55,11 @@ export default function RootStack() {
             component={Register}
             options={{ title: 'Đăng ký', headerShown: true }}
           />
+          <Stack.Screen
+            name="AboutUs"
+            component={AboutUs}
+            options={{ title: 'About Us', headerShown: true }}
+          />
         </>
       )}
     </Stack.Navigator>

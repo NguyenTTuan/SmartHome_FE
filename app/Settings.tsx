@@ -1,4 +1,4 @@
-import { Text, View, Button } from 'react-native'
+import { Text, View, Button, Alert } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { TabNavigatorParamList } from '../types/TabNavigatorParamList'
@@ -8,11 +8,22 @@ export default function Settings() {
   const { logout } = useAuth()
 
   const handleLogout = async () => {
-    try {
-      await logout()
-    } catch (error) {
-      console.error('Logout failed:', error)
-    }
+    Alert.alert('Đăng xuất', 'Bạn muốn đăng xuất phải không ?', [
+      {
+        text: 'Hủy',
+        style: 'cancel',
+      },
+      {
+        text: 'Đồng ý',
+        onPress: async () => {
+          try {
+            await logout()
+          } catch (error) {
+            Alert.alert('Lỗi', 'Đăng xuất thất bại')
+          }
+        },
+      },
+    ])
   }
 
   return (

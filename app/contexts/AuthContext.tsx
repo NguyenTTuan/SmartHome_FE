@@ -20,14 +20,53 @@ type AuthContextType = {
   user: User | null
   login: (username: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  refreshAccessToken: () => Promise<string>
   loading: boolean
 }
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 type Props = {
   children: ReactNode
 }
+
+// Create an Axios instance
+const apiClient = axios.create({
+  baseURL: API_HOST,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// Axios interceptor to handle token expiration and refresh
+apiClient.interceptors.response.use(
+  (response) => response, // Return response directly if successful
+  async (error) => {
+    const { user, refreshAccessToken } = useAuth()
+    const originalRequest = error.config
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Mark request as retrying
+      originalRequest._retry = true
+
+      try {
+        // Refresh the access token using the refresh token
+        const newAccessToken = await refreshAccessToken()
+
+        // Update Authorization header with the new access token
+        originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`
+
+        // Retry the original request with the new access token
+        return apiClient(originalRequest)
+      } catch (refreshError) {
+        // Handle the case where refresh token fails
+        console.error('Failed to refresh token:', refreshError)
+        // Optionally handle logout or other actions
+      }
+    }
+
+    return Promise.reject(error) // Reject the error if not handled
+  }
+)
 
 export const AuthProvider = ({ children }: Props) => {
   const [user, setUser] = useState<User | null>(null)
@@ -99,7 +138,9 @@ export const AuthProvider = ({ children }: Props) => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider
+      value={{ user, login, logout, refreshAccessToken, loading }}
+    >
       {children}
     </AuthContext.Provider>
   )
