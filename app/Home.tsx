@@ -111,7 +111,6 @@ export default function Home() {
       const fetchDevices = async () => {
         if (!user?.token) return
         setDataLoading(true) // Show loading indicator
-        console.log(user.token)
         try {
           const res = await apiClient.get(`${API_HOST}/api/v1/devices`, {
             headers: { Authorization: `Bearer ${user.token}` },
@@ -245,9 +244,20 @@ export default function Home() {
                   source={{
                     uri: `https://openweathermap.org/img/wn/${weather.weather[0].icon}@2x.png`,
                   }}
-                  style={{ width: 70, height: 70 }}
+                  style={{
+                    width: 70,
+                    height: 70,
+                    borderWidth: 2,
+                    borderColor: '#007AFF', // dùng màu chủ đạo hoặc màu nổi bật khác
+                    borderRadius: 35,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 1,
+                    shadowRadius: 2,
+                    backgroundColor: '#fff',
+                  }}
                 />
-                <View>
+                <View style={{ paddingLeft: 20 }}>
                   <Text style={{ fontSize: 16, fontWeight: '500' }}>
                     {weather.weather[0].main}
                   </Text>

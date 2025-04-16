@@ -75,6 +75,7 @@ export default function Devices() {
   // Lưu danh sách thiết bị fetch từ API
   const [dataLoading, setDataLoading] = useState(true)
   const [rooms, setRooms] = useState<Room[]>([])
+  const [top5Rooms, setTop5Rooms] = useState<string[]>([])
 
   // Bộ lọc tìm kiếm
   const [searchText, setSearchText] = useState<string>('')
@@ -119,6 +120,18 @@ export default function Devices() {
           )
           const grouped = groupDevicesByRoom(devicesWithState)
           setRooms(grouped)
+          // Sau khi setRooms(grouped)
+          const roomDeviceCount = grouped.reduce((acc, room) => {
+            acc[room.room] = room.devices.length
+            return acc
+          }, {} as Record<string, number>)
+
+          const topRooms = Object.entries(roomDeviceCount)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([room]) => room)
+
+          setTop5Rooms(topRooms)
         } catch (error) {
           console.error('Error fetching devices:', error)
         } finally {
@@ -212,16 +225,7 @@ export default function Devices() {
             ? 'on'
             : 'off',
       }))
-    } else if (
-      [
-        'Living Room',
-        'Bedroom',
-        'Kitchen',
-        'Study Room',
-        'Garage',
-        'Bathroom',
-      ].includes(label)
-    ) {
+    } else if (top5Rooms.includes(label)) {
       setFilters((prev) => ({
         ...prev,
         rooms: prev.rooms.includes(label)
@@ -285,37 +289,28 @@ export default function Devices() {
       />
 
       <View style={styles.filterContainer}>
-        {[
-          'Living Room',
-          'Bedroom',
-          'Kitchen',
-          'Study Room',
-          'Garage',
-          'Bathroom',
-          'Fan',
-          'Camera',
-          'Đang bật',
-          'Đang tắt',
-        ].map((label) => {
-          const isSelected =
-            filters.rooms.includes(label) ||
-            filters.types.includes(label) ||
-            (filters.status === 'on' && label === 'Đang bật') ||
-            (filters.status === 'off' && label === 'Đang tắt')
-          return (
-            <TouchableOpacity
-              key={label}
-              onPress={() => toggleFilter(label)}
-              style={[styles.chip, isSelected && styles.chipSelected]}
-            >
-              <Text
-                style={isSelected ? styles.chipTextSelected : styles.chipText}
+        {[...top5Rooms, 'Fan', 'Camera', 'Đang bật', 'Đang tắt'].map(
+          (label) => {
+            const isSelected =
+              filters.rooms.includes(label) ||
+              filters.types.includes(label) ||
+              (filters.status === 'on' && label === 'Đang bật') ||
+              (filters.status === 'off' && label === 'Đang tắt')
+            return (
+              <TouchableOpacity
+                key={label}
+                onPress={() => toggleFilter(label)}
+                style={[styles.chip, isSelected && styles.chipSelected]}
               >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
+                <Text
+                  style={isSelected ? styles.chipTextSelected : styles.chipText}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            )
+          }
+        )}
       </View>
 
       <Picker
@@ -388,7 +383,7 @@ const styles = StyleSheet.create({
   roomTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   deviceCard: {
     padding: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#fff',
     marginRight: 10,
     borderRadius: 10,
     alignItems: 'center',

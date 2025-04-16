@@ -120,7 +120,8 @@ export const AuthProvider = ({ children }: Props) => {
           const originalRequest = error.config
           if (
             (error.response?.status === 401 && !originalRequest._retry) ||
-            error.response?.status === 403
+            error.response?.status === 403 ||
+            error.response?.status === 404
           ) {
             originalRequest._retry = true
             try {
