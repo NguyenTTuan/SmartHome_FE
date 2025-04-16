@@ -11,15 +11,19 @@ import {
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
-import { RootStackParamList } from '../types/RootStackParamList'
+import { TabNavigatorParamList } from '../types/TabNavigatorParamList'
 import * as Location from 'expo-location'
-import axios from 'axios'
 import { LineChart } from 'react-native-chart-kit'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+// import axios from 'axios'
+import { apiClient, useAuth } from './contexts/AuthContext'
+import { getLatestCommand, toggleDevice } from '@/utils/deviceService'
+import { useFocusEffect } from 'expo-router'
 
-const API_KEY = '1ab14fde88ed778777c4a12000a8dfd9'
+const WHEATHER_API_KEY = '1ab14fde88ed778777c4a12000a8dfd9'
+const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>
+type NavigationProp = NativeStackNavigationProp<TabNavigatorParamList, 'Home'>
 
 const fakeSensorData = [
   { timestamp: '09:00', temperature: 25, humidity: 59 },
@@ -32,50 +36,48 @@ const fakeSensorData = [
   { timestamp: '16:00', temperature: 29, humidity: 67 },
 ]
 
-// Dữ liệu giả lập cho thiết bị trong từng phòng
-const fakeDevices = [
-  {
-    room: 'Living Room',
-    devices: [
-      { id: 1, name: 'TV', isOn: false },
-      { id: 2, name: 'Air Conditioner', isOn: true },
-      { id: 3, name: 'Fan', isOn: false },
-    ],
-  },
-  {
-    room: 'Bedroom',
-    devices: [
-      { id: 4, name: 'Lamp', isOn: true },
-      { id: 5, name: 'Smart Speaker', isOn: false },
-    ],
-  },
-  {
-    room: 'Kitchen',
-    devices: [
-      { id: 6, name: 'Refrigerator', isOn: true },
-      { id: 7, name: 'Oven', isOn: false },
-      { id: 8, name: 'Coffee Maker', isOn: false },
-      { id: 9, name: 'Coffee Maker', isOn: false },
-      { id: 10, name: 'Coffee Maker', isOn: false },
-      { id: 11, name: 'Coffee Maker', isOn: false },
-      { id: 12, name: 'Coffee Maker', isOn: false },
-    ],
-  },
-]
+// Định nghĩa kiểu cho Device
+interface Device {
+  id: string
+  name: string
+  room: string
+  isOn: boolean
+}
+
+// Định nghĩa kiểu cho Room
+interface Room {
+  room: string
+  devices: Device[]
+}
+
+// Hàm nhóm thiết bị theo phòng
+const groupDevicesByRoom = (devices: Device[]): Room[] => {
+  const groups: { [key: string]: Device[] } = {}
+  devices.forEach((device) => {
+    if (groups[device.room]) {
+      groups[device.room].push(device)
+    } else {
+      groups[device.room] = [device]
+    }
+  })
+  return Object.entries(groups).map(([room, devices]) => ({ room, devices }))
+}
 
 export default function Home() {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList, 'Home'>>()
+  const { user } = useAuth()
+  const navigation = useNavigation<NavigationProp>()
   const [weather, setWeather] = useState<any>(null)
   const [isPowerOn, setIsPowerOn] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [wheatherLoading, sethWeatherLoading] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
   const [selectedPoint, setSelectedPoint] = useState<any>(null)
+  const [rooms, setRooms] = useState<Room[]>([])
 
   useEffect(() => {
     ;(async () => {
       let { status } = await Location.requestForegroundPermissionsAsync()
       if (status !== 'granted') {
-        console.log('Permission to access location was denied')
+        console.error('Permission to access location was denied')
         return
       }
       let location = await Location.getCurrentPositionAsync({})
@@ -85,54 +87,75 @@ export default function Home() {
 
   const fetchWeather = async (lat: any, lon: any) => {
     try {
-      // const response = await axios.get(
-      //   `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
-      // )
-
-      setLoading(true)
-      // Simulate network delay
-      await new Promise((resolve) => setTimeout(resolve, 5000))
-      const fakeWeatherData = {
-        base: 'stations',
-        clouds: { all: 0 },
-        cod: 200,
-        coord: { lat: 10.7626, lon: 106.6602 },
-        dt: 1743741753,
-        id: 1566083,
-        main: {
-          feels_like: 39.7,
-          grnd_level: 1010,
-          humidity: 58,
-          pressure: 1011,
-          sea_level: 1011,
-          temp: 33.36,
-          temp_max: 33.36,
-          temp_min: 32.99,
-        },
-        name: 'Ho Chi Minh City',
-        sys: {
-          country: 'VN',
-          id: 2093009,
-          sunrise: 1743720511,
-          sunset: 1743764636,
-          type: 2,
-        },
-        timezone: 25200,
-        visibility: 10000,
-        weather: [
-          { description: 'clear sky', icon: '01d', id: 800, main: 'Clear' },
-        ],
-        wind: { deg: 70, speed: 4.63 },
-      }
-
-      // Set fake data to state
-      setWeather(fakeWeatherData)
-
-      // setWeather(response.data)
+      const response = await apiClient.get(
+        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WHEATHER_API_KEY}&units=metric`
+      )
+      setWeather(response.data)
     } catch (error) {
       console.error('Error fetching weather:', error)
     } finally {
-      setLoading(false)
+      sethWeatherLoading(false)
+    }
+  }
+
+  // Fetch device data when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchDevices = async () => {
+        if (!user?.token) return
+        setDataLoading(true) // Show loading indicator
+        try {
+          const res = await apiClient.get(`${API_HOST}/api/v1/devices`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+          })
+          const devicesFromApi = res.data.data
+
+          const latestCommandsPromises = devicesFromApi.map((device: Device) =>
+            getLatestCommand(device.id.toString(), user.token)
+          )
+          const latestCommands = await Promise.all(latestCommandsPromises)
+
+          const devicesWithState = devicesFromApi.map(
+            (device: Device, index: number) => ({
+              ...device,
+              isOn: latestCommands[index].command === '1',
+            })
+          )
+          const grouped = groupDevicesByRoom(devicesWithState)
+          setRooms(grouped)
+        } catch (error) {
+          console.error('Error fetching devices:', error)
+        } finally {
+          setDataLoading(false)
+        }
+      }
+      fetchDevices()
+    }, [user])
+  )
+
+  // Hàm xử lý bật/tắt thiết bị
+  const handleToggleDevice = async (deviceId: string, newState: boolean) => {
+    if (!user?.token) return
+    try {
+      const newCommand = newState ? '1' : '0'
+      const updatedCommand = await toggleDevice(
+        deviceId,
+        newCommand,
+        user.token
+      )
+      // Cập nhật trạng thái rooms
+      setRooms((prevRooms) =>
+        prevRooms.map((room) => ({
+          ...room,
+          devices: room.devices.map((device) =>
+            device.id === deviceId
+              ? { ...device, isOn: updatedCommand.command === '1' }
+              : device
+          ),
+        }))
+      )
+    } catch (err) {
+      console.error('Toggle failed:', err)
     }
   }
 
@@ -165,7 +188,7 @@ export default function Home() {
           margin: 10,
         }}
       >
-        {loading ? (
+        {wheatherLoading ? (
           <View>
             <ActivityIndicator size="large" color="#007AFF" />
             <Text
@@ -364,7 +387,7 @@ export default function Home() {
       </View>
 
       {/* Room Devices */}
-      {loading ? (
+      {dataLoading ? (
         <View>
           <ActivityIndicator size="large" color="#007AFF" />
           <Text
@@ -387,7 +410,7 @@ export default function Home() {
             margin: 10,
           }}
         >
-          {fakeDevices.map((roomData) => (
+          {rooms.map((roomData) => (
             <View key={roomData.room} style={{ marginBottom: 20 }}>
               <Text style={{ fontSize: 18, marginBottom: 10 }}>
                 {roomData.room}
@@ -410,13 +433,9 @@ export default function Home() {
                     <Text>{device.name}</Text>
                     <Switch
                       value={device.isOn}
-                      onValueChange={(newValue) => {
-                        // Implement logic to update device.isOn state
-                        console.log(
-                          `Device ${device.name} toggled to ${newValue}`
-                        )
-                        // Update your devices array here
-                      }}
+                      onValueChange={(newValue) =>
+                        handleToggleDevice(device.id.toString(), newValue)
+                      }
                     />
                   </View>
                 ))}
@@ -444,7 +463,7 @@ export default function Home() {
           }}
           onPress={() => navigation.navigate('Devices')}
         >
-          <Text style={{ color: 'white', fontSize: 18 }}>Xem thiết bị</Text>
+          <Text style={{ color: 'white', fontSize: 14 }}>Xem thêm</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

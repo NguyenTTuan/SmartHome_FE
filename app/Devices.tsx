@@ -11,16 +11,32 @@ import {
   StyleSheet,
 } from 'react-native'
 import { Picker } from '@react-native-picker/picker'
-import { useNavigation } from '@react-navigation/native'
+import {
+  CompositeNavigationProp,
+  useNavigation,
+} from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RootStackParamList } from '../types/RootStackParamList'
+import { TabNavigatorParamList } from '@/types/TabNavigatorParamList'
+import { apiClient, useAuth } from './contexts/AuthContext'
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Devices'>
+import { getLatestCommand, toggleDevice } from '../utils/deviceService'
+import { useFocusEffect } from 'expo-router'
+// import axios from 'axios'
+
+const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
+
+type NavigationProp = CompositeNavigationProp<
+  NativeStackNavigationProp<TabNavigatorParamList, 'Devices'>,
+  NativeStackNavigationProp<RootStackParamList>
+>
 
 // Định nghĩa kiểu cho Device
 interface Device {
   id: number
   name: string
+  type?: string
+  room: string
   isOn: boolean
 }
 
@@ -38,69 +54,29 @@ interface Filters {
   sort: '' | 'A-Z' | 'Z-A' | 'activeCount'
 }
 
-const fakeDevices: Room[] = [
-  {
-    room: 'Living Room',
-    devices: [
-      { id: 1, name: 'TV', isOn: false },
-      { id: 2, name: 'Air Conditioner', isOn: true },
-      { id: 3, name: 'Fan', isOn: false },
-      { id: 13, name: 'Camera', isOn: true },
-    ],
-  },
-  {
-    room: 'Bedroom',
-    devices: [
-      { id: 4, name: 'Lamp', isOn: true },
-      { id: 5, name: 'Smart Speaker', isOn: false },
-      { id: 14, name: 'Camera', isOn: false },
-    ],
-  },
-  {
-    room: 'Kitchen',
-    devices: [
-      { id: 6, name: 'Refrigerator', isOn: true },
-      { id: 7, name: 'Oven', isOn: false },
-      { id: 8, name: 'Coffee Maker', isOn: false },
-      { id: 9, name: 'Coffee Maker', isOn: false },
-      { id: 10, name: 'Coffee Maker', isOn: false },
-      { id: 11, name: 'Coffee Maker', isOn: false },
-      { id: 12, name: 'Coffee Maker', isOn: false },
-    ],
-  },
-  {
-    room: 'Study Room',
-    devices: [
-      { id: 15, name: 'Computer', isOn: true },
-      { id: 16, name: 'Lamp', isOn: false },
-      { id: 17, name: 'Camera', isOn: true },
-    ],
-  },
-  {
-    room: 'Garage',
-    devices: [
-      { id: 18, name: 'Car Charger', isOn: false },
-      { id: 19, name: 'Camera', isOn: false },
-    ],
-  },
-  {
-    room: 'Bathroom 1',
-    devices: [
-      { id: 20, name: 'Water Heater', isOn: true },
-      { id: 21, name: 'Mirror Light', isOn: true },
-    ],
-  },
-  {
-    room: 'Bathroom 2',
-    devices: [
-      { id: 22, name: 'Water Heater', isOn: true },
-      { id: 23, name: 'Mirror Light', isOn: true },
-    ],
-  },
-]
+// Hàm nhóm thiết bị theo phòng
+const groupDevicesByRoom = (devices: Device[]): Room[] => {
+  const groups: { [key: string]: Device[] } = {}
+  devices.forEach((device) => {
+    if (groups[device.room]) {
+      groups[device.room].push(device)
+    } else {
+      groups[device.room] = [device]
+    }
+  })
+  // Chuyển đổi đối tượng thành mảng
+  return Object.entries(groups).map(([room, devices]) => ({ room, devices }))
+}
 
 export default function Devices() {
   const navigation = useNavigation<NavigationProp>()
+  const { user } = useAuth()
+
+  // Lưu danh sách thiết bị fetch từ API
+  const [dataLoading, setDataLoading] = useState(true)
+  const [rooms, setRooms] = useState<Room[]>([])
+
+  // Bộ lọc tìm kiếm
   const [searchText, setSearchText] = useState<string>('')
   const [filters, setFilters] = useState<Filters>({
     rooms: [],
@@ -108,18 +84,81 @@ export default function Devices() {
     status: '',
     sort: '',
   })
+
+  // Lazy loading: số phòng hiển thị
   const [visibleRooms, setVisibleRooms] = useState<number>(5)
-  const [loading, setLoading] = useState<boolean>(true)
 
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 1000)
-  }, [])
+  // Fetch device data when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchDevices = async () => {
+        if (!user?.token) return
+        setDataLoading(true) // Show loading indicator
+        try {
+          const res = await apiClient.get(`${API_HOST}/api/v1/devices`, {
+            headers: { Authorization: `Bearer ${user.token}` },
+          })
+          const devicesFromApi = res.data.data
 
-  const filteredRooms: Room[] = fakeDevices
-    .filter((roomData) => {
-      if (filters.rooms.length && !filters.rooms.includes(roomData.room))
-        return false
-      const matchingDevices = roomData.devices.filter((device) => {
+          const latestCommandsPromises = devicesFromApi.map((device: Device) =>
+            getLatestCommand(device.id.toString(), user.token)
+          )
+          const latestCommands = await Promise.all(latestCommandsPromises)
+
+          const devicesWithState = devicesFromApi.map(
+            (device: Device, index: number) => ({
+              ...device,
+              isOn: latestCommands[index].command === '1',
+            })
+          )
+          const grouped = groupDevicesByRoom(devicesWithState)
+          setRooms(grouped)
+        } catch (error) {
+          console.error('Error fetching devices:', error)
+        } finally {
+          setDataLoading(false)
+        }
+      }
+      fetchDevices()
+    }, [user])
+  )
+
+  // Hàm xử lý bật/tắt thiết bị
+  const handleToggleDevice = async (deviceId: string, newState: boolean) => {
+    if (!user?.token) return
+    try {
+      const newCommand = newState ? '1' : '0'
+      const updatedCommand = await toggleDevice(
+        deviceId,
+        newCommand,
+        user.token
+      )
+
+      // Cập nhật trạng thái rooms
+      setRooms((prevRooms) =>
+        prevRooms.map((room) => ({
+          ...room,
+          devices: room.devices.map((device) =>
+            device.id.toString() === deviceId
+              ? { ...device, isOn: updatedCommand.command === '1' }
+              : device
+          ),
+        }))
+      )
+    } catch (err) {
+      console.error('Toggle failed:', err)
+    }
+  }
+
+  // Áp dụng bộ lọc lên danh sách rooms đã nhóm
+  const filteredRooms: Room[] = rooms
+    .map((roomData) => {
+      // Nếu có filter theo phòng, chỉ giữ lại phòng trùng với filter
+      if (filters.rooms.length && !filters.rooms.includes(roomData.room)) {
+        return { room: roomData.room, devices: [] }
+      }
+      // Lọc thiết bị theo search, loại và trạng thái
+      const filteredDevices = roomData.devices.filter((device) => {
         const matchName =
           device.name.toLowerCase().includes(searchText.toLowerCase()) ||
           roomData.room.toLowerCase().includes(searchText.toLowerCase())
@@ -133,9 +172,9 @@ export default function Devices() {
             : !device.isOn
         return matchName && matchType && matchStatus
       })
-      roomData.devices = matchingDevices
-      return matchingDevices.length > 0
+      return { room: roomData.room, devices: filteredDevices }
     })
+    .filter((room) => room.devices.length > 0)
     .sort((a, b) => {
       if (filters.sort === 'A-Z') return a.room.localeCompare(b.room)
       if (filters.sort === 'Z-A') return b.room.localeCompare(a.room)
@@ -148,27 +187,80 @@ export default function Devices() {
     })
     .slice(0, visibleRooms)
 
+  // Hàm load thêm khi cuộn đến cuối danh sách
   const handleLoadMore = () => {
-    if (visibleRooms < fakeDevices.length) {
+    if (visibleRooms < rooms.length) {
       setVisibleRooms((prev) => prev + 5)
     }
   }
 
+  const toggleFilter = (label: string) => {
+    // Cập nhật filter status, rooms và types tùy thuộc vào label
+    if (label === 'Đang bật' || label === 'Đang tắt') {
+      setFilters((prev) => ({
+        ...prev,
+        status:
+          prev.status === (label === 'Đang bật' ? 'on' : 'off')
+            ? ''
+            : label === 'Đang bật'
+            ? 'on'
+            : 'off',
+      }))
+    } else if (
+      [
+        'Living Room',
+        'Bedroom',
+        'Kitchen',
+        'Study Room',
+        'Garage',
+        'Bathroom',
+      ].includes(label)
+    ) {
+      setFilters((prev) => ({
+        ...prev,
+        rooms: prev.rooms.includes(label)
+          ? prev.rooms.filter((r) => r !== label)
+          : [...prev.rooms, label],
+      }))
+    } else {
+      setFilters((prev) => ({
+        ...prev,
+        types: prev.types.includes(label)
+          ? prev.types.filter((t) => t !== label)
+          : [...prev.types, label],
+      }))
+    }
+  }
+
+  // Render từng phòng
   const renderRoomItem = ({ item }: { item: Room }) => (
     <View style={styles.roomContainer}>
       <TouchableOpacity
-        onPress={() => navigation.navigate('RoomDetail', { room: item.room })}
+        onPress={() =>
+          navigation.navigate('RoomDetail', {
+            roomName: item.room,
+          })
+        }
       >
         <Text style={styles.roomTitle}>{item.room}</Text>
       </TouchableOpacity>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {item.devices.map((device: Device) => (
           <View key={device.id} style={styles.deviceCard}>
-            <Text style={styles.deviceName}>{device.name}</Text>
+            <TouchableOpacity
+              onPress={() =>
+                navigation.navigate('DeviceDetail', {
+                  deviceId: device.id.toString(),
+                  deviceName: device.name.toString(),
+                })
+              }
+            >
+              <Text>{device.name}</Text>
+            </TouchableOpacity>
             <Switch
               value={device.isOn}
               onValueChange={(newValue) =>
-                console.log(`Device ${device.name} toggled to ${newValue}`)
+                handleToggleDevice(device.id.toString(), newValue)
               }
             />
           </View>
@@ -190,64 +282,40 @@ export default function Devices() {
         {[
           'Living Room',
           'Bedroom',
+          'Kitchen',
+          'Study Room',
+          'Garage',
+          'Bathroom',
           'Fan',
           'Camera',
           'Đang bật',
           'Đang tắt',
-        ].map((label) => (
-          <TouchableOpacity
-            key={label}
-            style={[
-              styles.chip,
-              (filters.rooms.includes(label) ||
-                filters.types.includes(label) ||
-                (filters.status === 'on' && label === 'Đang bật') ||
-                (filters.status === 'off' && label === 'Đang tắt')) &&
-                styles.chipSelected,
-            ]}
-            onPress={() => {
-              if (label === 'Đang bật' || label === 'Đang tắt') {
-                setFilters((prev: Filters) => ({
-                  ...prev,
-                  status: label === 'Đang bật' ? 'on' : 'off',
-                }))
-              } else if (['Living Room', 'Bedroom'].includes(label)) {
-                setFilters((prev: Filters) => ({
-                  ...prev,
-                  rooms: prev.rooms.includes(label)
-                    ? prev.rooms.filter((r: string) => r !== label)
-                    : [...prev.rooms, label],
-                }))
-              } else {
-                setFilters((prev: Filters) => ({
-                  ...prev,
-                  types: prev.types.includes(label)
-                    ? prev.types.filter((t: string) => t !== label)
-                    : [...prev.types, label],
-                }))
-              }
-            }}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                (filters.rooms.includes(label) ||
-                  filters.types.includes(label) ||
-                  (filters.status === 'on' && label === 'Đang bật') ||
-                  (filters.status === 'off' && label === 'Đang tắt')) &&
-                  styles.chipTextSelected,
-              ]}
+        ].map((label) => {
+          const isSelected =
+            filters.rooms.includes(label) ||
+            filters.types.includes(label) ||
+            (filters.status === 'on' && label === 'Đang bật') ||
+            (filters.status === 'off' && label === 'Đang tắt')
+          return (
+            <TouchableOpacity
+              key={label}
+              onPress={() => toggleFilter(label)}
+              style={[styles.chip, isSelected && styles.chipSelected]}
             >
-              {label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={isSelected ? styles.chipTextSelected : styles.chipText}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
       </View>
 
       <Picker
         selectedValue={filters.sort}
         onValueChange={(value) =>
-          setFilters((prev: Filters) => ({ ...prev, sort: value }))
+          setFilters((prev) => ({ ...prev, sort: value as Filters['sort'] }))
         }
         style={styles.picker}
       >
@@ -257,12 +325,12 @@ export default function Devices() {
         <Picker.Item label="Phòng có nhiều thiết bị bật" value="activeCount" />
       </Picker>
 
-      {loading ? (
+      {dataLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
           <Text style={styles.loadingText}>Đang lấy dữ liệu thiết bị...</Text>
         </View>
-      ) : (
+      ) : filteredRooms.length > 0 ? (
         <FlatList
           data={filteredRooms}
           renderItem={renderRoomItem}
@@ -270,11 +338,19 @@ export default function Devices() {
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
           ListFooterComponent={
-            visibleRooms < fakeDevices.length ? (
-              <ActivityIndicator size="small" color="#007AFF" />
+            visibleRooms < rooms.length ? (
+              <ActivityIndicator
+                size="small"
+                color="#007AFF"
+                style={{ marginVertical: 10 }}
+              />
             ) : null
           }
         />
+      ) : (
+        <View style={styles.roomContainer}>
+          <Text style={{ padding: 16, color: 'red' }}>Không có thiết bị</Text>
+        </View>
       )}
     </View>
   )
@@ -313,5 +389,10 @@ const styles = StyleSheet.create({
   },
   deviceName: { fontSize: 14 },
   loadingContainer: { alignItems: 'center', marginTop: 20 },
-  loadingText: { fontSize: 11, fontWeight: 'bold', marginTop: 10 },
+  loadingText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
 })
