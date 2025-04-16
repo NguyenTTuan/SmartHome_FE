@@ -3,5 +3,4 @@ export type RootStackParamList = {
   Register: undefined
   Main: undefined
   AboutUs: undefined
-  RoomDetail: { room: string }
 }

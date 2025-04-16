@@ -7,7 +7,7 @@ import React, {
 } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import axios from 'axios'
-import { View, ActivityIndicator } from 'react-native'
+import { View, ActivityIndicator, Alert } from 'react-native'
 
 const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
 
@@ -36,37 +36,6 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 })
-
-// Axios interceptor to handle token expiration and refresh
-apiClient.interceptors.response.use(
-  (response) => response, // Return response directly if successful
-  async (error) => {
-    const { user, refreshAccessToken } = useAuth()
-    const originalRequest = error.config
-
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      // Mark request as retrying
-      originalRequest._retry = true
-
-      try {
-        // Refresh the access token using the refresh token
-        const newAccessToken = await refreshAccessToken()
-
-        // Update Authorization header with the new access token
-        originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`
-
-        // Retry the original request with the new access token
-        return apiClient(originalRequest)
-      } catch (refreshError) {
-        // Handle the case where refresh token fails
-        console.error('Failed to refresh token:', refreshError)
-        // Optionally handle logout or other actions
-      }
-    }
-
-    return Promise.reject(error) // Reject the error if not handled
-  }
-)
 
 export const AuthProvider = ({ children }: Props) => {
   const [user, setUser] = useState<User | null>(null)
@@ -123,11 +92,57 @@ export const AuthProvider = ({ children }: Props) => {
     const res = await axios.post(`${API_HOST}/api/v1/access/token/refresh`, {
       refreshToken,
     })
-    const { accessToken } = res.data
+    const accessToken = res.data.data.access_token
+    console.log(res.data)
     await AsyncStorage.setItem('accessToken', accessToken)
     setUser((prev) => (prev ? { ...prev, token: accessToken } : null))
     return accessToken
   }
+
+  useEffect(() => {
+    const setupInterceptor = () => {
+      // Gắn token vào mỗi request
+      apiClient.interceptors.request.use(
+        async (config) => {
+          const token = await AsyncStorage.getItem('accessToken')
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`
+          }
+          return config
+        },
+        (error) => Promise.reject(error)
+      )
+      // Xử lý khi token hết hạn
+      apiClient.interceptors.response.use(
+        (response) => response,
+        async (error) => {
+          const originalRequest = error.config
+          if (
+            (error.response?.status === 401 && !originalRequest._retry) ||
+            error.response?.status === 403
+          ) {
+            originalRequest._retry = true
+            try {
+              const newAccessToken = await refreshAccessToken()
+              originalRequest.headers[
+                'Authorization'
+              ] = `Bearer ${newAccessToken}`
+              return apiClient(originalRequest)
+            } catch (refreshError) {
+              Alert.alert(
+                'Đăng xuất',
+                'Bạn đã hoạt động quá lâu. Vui lòng đăng nhập lại'
+              )
+              await logout()
+            }
+          }
+          return Promise.reject(error)
+        }
+      )
+    }
+
+    setupInterceptor()
+  }, [])
 
   if (loading) {
     return (
@@ -153,3 +168,5 @@ export const useAuth = () => {
   }
   return context
 }
+
+export { apiClient }

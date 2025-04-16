@@ -2,6 +2,7 @@ import * as React from 'react'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import Home from './../Home'
 import Devices from './../Devices'
+import DevicesStack from './../DevicesStack'
 import Cameras from './../Cameras'
 import Notifications from './../Notifications'
 import Settings from './../Settings'
@@ -40,6 +41,7 @@ const TabNavigator = () => {
         tabBarInactiveTintColor: 'gray',
         headerShown: true,
         tabBarLabelPosition: 'below-icon',
+        tabBarHideOnKeyboard: true,
       })}
     >
       <Tab.Screen
@@ -49,7 +51,7 @@ const TabNavigator = () => {
       />
       <Tab.Screen
         name="Devices"
-        component={Devices}
+        component={DevicesStack}
         options={{ title: 'Thiết bị' }}
       />
       <Tab.Screen
