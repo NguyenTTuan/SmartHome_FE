@@ -9,7 +9,10 @@ import {
   Dimensions,
   Image,
 } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
+import {
+  CompositeNavigationProp,
+  useNavigation,
+} from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { TabNavigatorParamList } from '../types/TabNavigatorParamList'
 import * as Location from 'expo-location'
@@ -19,11 +22,15 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { apiClient, useAuth } from './contexts/AuthContext'
 import { getLatestCommand, toggleDevice } from '@/utils/deviceService'
 import { useFocusEffect } from 'expo-router'
+import { RootStackParamList } from '@/types/RootStackParamList'
 
 const WHEATHER_API_KEY = '1ab14fde88ed778777c4a12000a8dfd9'
 const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
 
-type NavigationProp = NativeStackNavigationProp<TabNavigatorParamList, 'Home'>
+type NavigationProp = CompositeNavigationProp<
+  NativeStackNavigationProp<RootStackParamList, 'Main'>,
+  NativeStackNavigationProp<TabNavigatorParamList, 'Home'>
+>
 
 const fakeSensorData = [
   { timestamp: '09:00', temperature: 25, humidity: 59 },
@@ -104,21 +111,29 @@ export default function Home() {
       const fetchDevices = async () => {
         if (!user?.token) return
         setDataLoading(true) // Show loading indicator
+        console.log(user.token)
         try {
           const res = await apiClient.get(`${API_HOST}/api/v1/devices`, {
             headers: { Authorization: `Bearer ${user.token}` },
           })
           const devicesFromApi = res.data.data
-
-          const latestCommandsPromises = devicesFromApi.map((device: Device) =>
-            getLatestCommand(device.id.toString(), user.token)
+          const latestCommandsPromises = devicesFromApi.map(
+            async (device: Device) => {
+              try {
+                return await getLatestCommand(device.id.toString(), user.token)
+              } catch (error) {
+                console.warn(`No command for device ${device.id}, skipping`)
+                return null // hoặc trả về giá trị mặc định
+              }
+            }
           )
+
           const latestCommands = await Promise.all(latestCommandsPromises)
 
           const devicesWithState = devicesFromApi.map(
             (device: Device, index: number) => ({
               ...device,
-              isOn: latestCommands[index].command === '1',
+              isOn: latestCommands[index]?.command === '1' ?? false,
             })
           )
           const grouped = groupDevicesByRoom(devicesWithState)
@@ -398,7 +413,7 @@ export default function Home() {
               marginBottom: 10,
             }}
           >
-            Đang lấy dữ liệu thiết bị... {/* Corrected loading message */}
+            Đang lấy dữ liệu thiết bị...
           </Text>
         </View>
       ) : (
@@ -412,9 +427,22 @@ export default function Home() {
         >
           {rooms.map((roomData) => (
             <View key={roomData.room} style={{ marginBottom: 20 }}>
-              <Text style={{ fontSize: 18, marginBottom: 10 }}>
-                {roomData.room}
-              </Text>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('DevicesStack', {
+                    screen: 'RoomDetail',
+                    params: {
+                      roomName: roomData.room,
+                    },
+                  })
+                }
+              >
+                <Text
+                  style={{ fontSize: 18, marginBottom: 10, fontWeight: 'bold' }}
+                >
+                  {roomData.room}
+                </Text>
+              </TouchableOpacity>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -430,7 +458,20 @@ export default function Home() {
                       borderRadius: 10,
                     }}
                   >
-                    <Text>{device.name}</Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        navigation.navigate('DevicesStack', {
+                          screen: 'DeviceDetail',
+                          params: {
+                            deviceId: device.id,
+                            deviceName: device.name,
+                          },
+                        })
+                      }
+                    >
+                      <Text>{device.name}</Text>
+                    </TouchableOpacity>
+
                     <Switch
                       value={device.isOn}
                       onValueChange={(newValue) =>

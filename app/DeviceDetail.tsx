@@ -42,8 +42,13 @@ const DeviceDetail = () => {
     if (!user?.token) return
 
     try {
-      const latest = await getLatestCommand(deviceId, user.token)
-      setIsOn(latest.command === '1')
+      try {
+        const latestCommand = await getLatestCommand(deviceId, user.token)
+        setIsOn(latestCommand?.command === '1') // hoặc Boolean(latestCommand?.command === '1')
+      } catch (error) {
+        console.warn(`No latest command for device ${deviceId}:`, error)
+        setIsOn(false) // hoặc giá trị mặc định khác
+      }
       const recentHistory: DeviceCommand[] = await getDeviceCommandHistory(
         deviceId,
         user?.token

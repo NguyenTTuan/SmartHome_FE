@@ -66,8 +66,14 @@ export default function RoomDetail() {
         )
 
         // Get the latest command for each device
-        const latestCommandsPromises = roomDevices.map((device: Device) =>
-          getLatestCommand(device.id, user.token)
+        const latestCommandsPromises = roomDevices.map(
+          async (device: Device) => {
+            try {
+              return await getLatestCommand(device.id.toString(), user.token)
+            } catch (error) {
+              return null // trả về giá trị mặc định
+            }
+          }
         )
         const latestCommands = await Promise.all(latestCommandsPromises)
 
@@ -75,7 +81,7 @@ export default function RoomDetail() {
         const devicesWithState = roomDevices.map(
           (device: Device, index: number) => ({
             ...device,
-            isOn: latestCommands[index].command === '1', // Assuming '1' is on, '0' is off
+            isOn: latestCommands[index]?.command === '1' ?? false, // trả về giá trị mặc định là False
           })
         )
 

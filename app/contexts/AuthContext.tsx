@@ -59,6 +59,8 @@ export const AuthProvider = ({ children }: Props) => {
     })
     const accessToken = res.data.data.access_token
     const refreshToken = res.data.data.refresh_token
+    console.log('accessToken', accessToken)
+    console.log('refreshToken', refreshToken)
     await AsyncStorage.setItem('accessToken', accessToken)
     await AsyncStorage.setItem('refreshToken', refreshToken)
     setUser({ username, token: accessToken })
@@ -92,8 +94,7 @@ export const AuthProvider = ({ children }: Props) => {
     const res = await axios.post(`${API_HOST}/api/v1/access/token/refresh`, {
       refreshToken,
     })
-    const accessToken = res.data.data.access_token
-    console.log(res.data)
+    const accessToken = res.data.data
     await AsyncStorage.setItem('accessToken', accessToken)
     setUser((prev) => (prev ? { ...prev, token: accessToken } : null))
     return accessToken
@@ -130,7 +131,7 @@ export const AuthProvider = ({ children }: Props) => {
               return apiClient(originalRequest)
             } catch (refreshError) {
               Alert.alert(
-                'Đăng xuất',
+                'Hết phiên đăng nhập',
                 'Bạn đã hoạt động quá lâu. Vui lòng đăng nhập lại'
               )
               await logout()

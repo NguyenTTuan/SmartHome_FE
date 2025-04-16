@@ -100,15 +100,21 @@ export default function Devices() {
           })
           const devicesFromApi = res.data.data
 
-          const latestCommandsPromises = devicesFromApi.map((device: Device) =>
-            getLatestCommand(device.id.toString(), user.token)
+          const latestCommandsPromises = devicesFromApi.map(
+            async (device: Device) => {
+              try {
+                return await getLatestCommand(device.id.toString(), user.token)
+              } catch (error) {
+                return null // trả về giá trị mặc định
+              }
+            }
           )
           const latestCommands = await Promise.all(latestCommandsPromises)
 
           const devicesWithState = devicesFromApi.map(
             (device: Device, index: number) => ({
               ...device,
-              isOn: latestCommands[index].command === '1',
+              isOn: latestCommands[index]?.command === '1' ?? false, // trả về giá trị mặc định là False
             })
           )
           const grouped = groupDevicesByRoom(devicesWithState)

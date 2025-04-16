@@ -8,6 +8,8 @@ import Login from '../Login'
 import Register from '../Register'
 import { useAuth } from '../contexts/AuthContext'
 import { ActivityIndicator, View } from 'react-native'
+import DeviceDetail from '../DeviceDetail'
+import DevicesStack from './DevicesStack'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
 
@@ -38,8 +40,8 @@ export default function RootStack() {
             options={{ title: 'About Us', headerShown: true }}
           />
           <Stack.Screen
-            name="RoomDetail"
-            component={RoomDetail}
+            name="DevicesStack"
+            component={DevicesStack}
             options={{ headerShown: true }}
           />
         </>

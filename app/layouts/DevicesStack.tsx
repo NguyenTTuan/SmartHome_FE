@@ -1,9 +1,9 @@
 import React from 'react'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import Devices from './Devices'
-import DeviceDetail from './DeviceDetail'
+import Devices from '../Devices'
+import DeviceDetail from '../DeviceDetail'
 import { TabNavigatorParamList } from '@/types/TabNavigatorParamList'
-import RoomDetail from './RoomDetail'
+import RoomDetail from '../RoomDetail'
 
 const Stack = createNativeStackNavigator<TabNavigatorParamList>()
 
