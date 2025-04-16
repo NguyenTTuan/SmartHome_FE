@@ -141,7 +141,9 @@ export default function Devices() {
 
           const latestCommandsPromises = devicesFromApi.map(
             async (device: Device) => {
-              const isSensor = device.name.toLowerCase().includes('sensor')
+              const isSensor =
+                device.name.toLowerCase().includes('sensor') ||
+                device.name.toLowerCase().includes('thermostat')
               try {
                 if (isSensor) {
                   const res = await getAllLog(device.id.toString(), user.token)
@@ -159,7 +161,9 @@ export default function Devices() {
             (device: Device, index: number) => {
               const latest = latestCommands[index]
               const isFan = device.name.toLowerCase().includes('fan')
-              const isSensor = device.name.toLowerCase().includes('sensor')
+              const isSensor =
+                device.name.toLowerCase().includes('sensor') ||
+                device.name.toLowerCase().includes('thermostat')
 
               return {
                 ...device,
@@ -181,7 +185,7 @@ export default function Devices() {
 
           const topRooms = Object.entries(roomDeviceCount)
             .sort((a, b) => b[1] - a[1])
-            .slice(0, 5)
+            .slice(0, 3)
             .map(([room]) => room)
 
           setTop5Rooms(topRooms)
@@ -235,7 +239,10 @@ export default function Devices() {
           device.name.toLowerCase().includes(searchText.toLowerCase()) ||
           roomData.room.toLowerCase().includes(searchText.toLowerCase())
         const matchType =
-          filters.types.length === 0 || filters.types.includes(device.name)
+          filters.types.length === 0 ||
+          filters.types.some((type) =>
+            device.name.toLowerCase().includes(type.toLowerCase())
+          )
         const matchStatus =
           filters.status === ''
             ? true
@@ -310,7 +317,9 @@ export default function Devices() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {item.devices.map((device: Device) => {
           const isFan = device.name.toLowerCase().includes('fan')
-          const isSensor = device.name.toLowerCase().includes('sensor')
+          const isSensor =
+            device.name.toLowerCase().includes('sensor') ||
+            device.name.toLowerCase().includes('thermostat')
           return (
             <View key={device.id} style={styles.deviceCard}>
               <TouchableOpacity
@@ -446,7 +455,7 @@ const styles = StyleSheet.create({
   chipText: { color: '#000' },
   chipTextSelected: { color: '#fff' },
   picker: { marginHorizontal: 10 },
-  roomContainer: { marginBottom: 20 },
+  roomContainer: { padding: 10 },
   roomTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   deviceCard: {
     padding: 10,
