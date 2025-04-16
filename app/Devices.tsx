@@ -20,7 +20,11 @@ import { RootStackParamList } from '../types/RootStackParamList'
 import { TabNavigatorParamList } from '@/types/TabNavigatorParamList'
 import { apiClient, useAuth } from './contexts/AuthContext'
 
-import { getLatestCommand, toggleDevice } from '../utils/deviceService'
+import {
+  getAllLog,
+  getLatestCommand,
+  toggleDevice,
+} from '../utils/deviceService'
 import { useFocusEffect } from 'expo-router'
 // import axios from 'axios'
 
@@ -38,6 +42,19 @@ interface Device {
   type?: string
   room: string
   isOn: boolean
+  speed?: number // cho quạt
+  latestSensorValue?: string // cho sensor
+  created_at: string
+  updated_at: string
+}
+
+type DeviceCommand = {
+  id: string
+  device_id: string
+  command?: string
+  value?: string
+  created_at: string
+  updated_at: string
 }
 
 // Định nghĩa kiểu cho Room
@@ -66,6 +83,27 @@ const groupDevicesByRoom = (devices: Device[]): Room[] => {
   })
   // Chuyển đổi đối tượng thành mảng
   return Object.entries(groups).map(([room, devices]) => ({ room, devices }))
+}
+
+const filterAndSortHistory = (commands: DeviceCommand[]): DeviceCommand[] => {
+  const now = new Date()
+  const _24hoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+  return commands
+    .filter((item) => {
+      const createdAt = new Date(item.created_at)
+      const isRecent = createdAt >= _24hoursAgo
+      const isNumberValue =
+        item.value !== undefined && !isNaN(parseFloat(item.value))
+      const isNumberCommand =
+        item.command !== undefined && !isNaN(parseFloat(item.command))
+
+      return isRecent && (isNumberValue || isNumberCommand)
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
 }
 
 export default function Devices() {
@@ -103,7 +141,12 @@ export default function Devices() {
 
           const latestCommandsPromises = devicesFromApi.map(
             async (device: Device) => {
+              const isSensor = device.name.toLowerCase().includes('sensor')
               try {
+                if (isSensor) {
+                  const res = await getAllLog(device.id.toString(), user.token)
+                  return filterAndSortHistory(res)[0]
+                }
                 return await getLatestCommand(device.id.toString(), user.token)
               } catch (error) {
                 return null // trả về giá trị mặc định
@@ -113,13 +156,23 @@ export default function Devices() {
           const latestCommands = await Promise.all(latestCommandsPromises)
 
           const devicesWithState = devicesFromApi.map(
-            (device: Device, index: number) => ({
-              ...device,
-              isOn: latestCommands[index]?.command === '1' ?? false, // trả về giá trị mặc định là False
-            })
+            (device: Device, index: number) => {
+              const latest = latestCommands[index]
+              const isFan = device.name.toLowerCase().includes('fan')
+              const isSensor = device.name.toLowerCase().includes('sensor')
+
+              return {
+                ...device,
+                isOn: latest?.command === '1' ?? false,
+                speed: isFan ? parseInt(latest?.command || '0') : undefined,
+                latestSensorValue: isSensor ? latest?.value : undefined,
+              }
+            }
           )
+
           const grouped = groupDevicesByRoom(devicesWithState)
           setRooms(grouped)
+
           // Sau khi setRooms(grouped)
           const roomDeviceCount = grouped.reduce((acc, room) => {
             acc[room.room] = room.devices.length
@@ -255,26 +308,40 @@ export default function Devices() {
         <Text style={styles.roomTitle}>{item.room}</Text>
       </TouchableOpacity>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {item.devices.map((device: Device) => (
-          <View key={device.id} style={styles.deviceCard}>
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate('DeviceDetail', {
-                  deviceId: device.id.toString(),
-                  deviceName: device.name.toString(),
-                })
-              }
-            >
-              <Text>{device.name}</Text>
-            </TouchableOpacity>
-            <Switch
-              value={device.isOn}
-              onValueChange={(newValue) =>
-                handleToggleDevice(device.id.toString(), newValue)
-              }
-            />
-          </View>
-        ))}
+        {item.devices.map((device: Device) => {
+          const isFan = device.name.toLowerCase().includes('fan')
+          const isSensor = device.name.toLowerCase().includes('sensor')
+          return (
+            <View key={device.id} style={styles.deviceCard}>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('DeviceDetail', {
+                    deviceId: device.id.toString(),
+                    deviceName: device.name.toString(),
+                  })
+                }
+              >
+                <Text>{device.name}</Text>
+              </TouchableOpacity>
+              {isFan ? (
+                <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>
+                  Tốc độ: {device.speed ?? 0}%
+                </Text>
+              ) : isSensor ? (
+                <Text style={{ color: '#FF9500', fontWeight: 'bold' }}>
+                  Giá trị: {device.latestSensorValue ?? '--'}
+                </Text>
+              ) : (
+                <Switch
+                  value={device.isOn}
+                  onValueChange={(newValue) =>
+                    handleToggleDevice(device.id.toString(), newValue)
+                  }
+                />
+              )}
+            </View>
+          )
+        })}
       </ScrollView>
     </View>
   )

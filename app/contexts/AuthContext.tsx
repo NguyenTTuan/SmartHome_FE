@@ -8,6 +8,9 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import axios from 'axios'
 import { View, ActivityIndicator, Alert } from 'react-native'
+import { useNavigation } from 'expo-router'
+import { RootStackParamList } from '@/types/RootStackParamList'
+import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 
 const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
 
@@ -23,11 +26,14 @@ type AuthContextType = {
   refreshAccessToken: () => Promise<string>
   loading: boolean
 }
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 type Props = {
   children: ReactNode
 }
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>
 
 // Create an Axios instance
 const apiClient = axios.create({
@@ -38,6 +44,7 @@ const apiClient = axios.create({
 })
 
 export const AuthProvider = ({ children }: Props) => {
+  const navigation = useNavigation<NavigationProp>()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -120,8 +127,7 @@ export const AuthProvider = ({ children }: Props) => {
           const originalRequest = error.config
           if (
             (error.response?.status === 401 && !originalRequest._retry) ||
-            error.response?.status === 403 ||
-            error.response?.status === 404
+            error.response?.status === 403
           ) {
             originalRequest._retry = true
             try {

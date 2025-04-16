@@ -9,10 +9,10 @@ import {
   StyleSheet,
   Dimensions,
   ScrollView,
-  TouchableOpacity,
   PanResponder,
   Animated,
 } from 'react-native'
+import Slider from '@react-native-community/slider'
 import { RouteProp, useRoute } from '@react-navigation/native'
 import {
   getLatestCommand,
@@ -24,6 +24,8 @@ import { useAuth } from './contexts/AuthContext'
 import { useNavigation } from 'expo-router'
 import { TabNavigatorParamList } from '@/types/TabNavigatorParamList'
 import { LineChart } from 'react-native-chart-kit'
+import { is } from 'date-fns/locale'
+import { debounce } from '@/utils/helpers'
 
 type DeviceDetailRouteProp = RouteProp<TabNavigatorParamList, 'DeviceDetail'>
 
@@ -31,6 +33,7 @@ type DeviceCommand = {
   id: string
   device_id: string
   command: string
+  value: string
   created_at: string
   updated_at: string
 }
@@ -79,14 +82,28 @@ const DeviceDetail = () => {
   const isSensor =
     deviceName.toLowerCase().includes('sensor') ||
     deviceName.toLowerCase().includes('thermostat')
+  const isFan = deviceName.toLowerCase().includes('fan')
+
   const POINTS_TO_SHOW = 6
 
-  // Function to filter and sort history
+  // Nếu là quạt, ta sẽ sử dụng state fanSpeed (0-100)
+  const [fanSpeed, setFanSpeed] = useState<number>(isFan ? 50 : 0)
+
   const filterAndSortHistory = (commands: DeviceCommand[]): DeviceCommand[] => {
     const now = new Date()
-    const _24hoursAgo = new Date(now.setDate(now.getDate() - 1))
+    const _24hoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
     return commands
-      .filter((item) => new Date(item.created_at) >= _24hoursAgo)
+      .filter((item) => {
+        const createdAt = new Date(item.created_at)
+        const isRecent = createdAt >= _24hoursAgo
+        const isNumberValue =
+          item.value !== undefined && !isNaN(parseFloat(item.value))
+        const isNumberCommand =
+          item.command !== undefined && !isNaN(parseFloat(item.command))
+
+        return isRecent && (isNumberValue || isNumberCommand)
+      })
       .sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -96,46 +113,80 @@ const DeviceDetail = () => {
   // Fetch latest command and history
   const fetchData = async () => {
     if (!user?.token) return
-
     try {
       try {
         const latestCommand = await getLatestCommand(deviceId, user.token)
-        setIsOn(latestCommand?.command === '1')
+        if (isFan) {
+          const speed = parseInt(latestCommand?.command || '0')
+          setFanSpeed(speed)
+        } else {
+          setIsOn(latestCommand?.command === '1')
+        }
       } catch (error) {
         console.warn(`No latest command for device ${deviceId}:`, error)
         setIsOn(false)
       }
-      const recentHistory = await getDeviceCommandHistory(deviceId, user.token)
-      setHistory(filterAndSortHistory(recentHistory))
+      if (isFan || isSensor) {
+        const recentHistory = await getAllLog(deviceId, user.token)
+        setHistory(filterAndSortHistory(recentHistory))
+      } else {
+        const recentHistory = await getDeviceCommandHistory(
+          deviceId,
+          user.token
+        )
+        setHistory(filterAndSortHistory(recentHistory))
+      }
     } catch (err) {
       console.error('Lỗi khi tải dữ liệu thiết bị:', err)
     }
   }
 
-  // Handle device toggle
+  // Handle toggle for non-fan devices
   const handleToggle = async () => {
     if (!user?.token) return
-
     try {
-      let fanSpeed = 0
-      if (deviceName.includes('Fan') && !isOn) {
-        fanSpeed = 100
+      // Dành cho thiết bị không phải quạt
+      const updated = await toggleDevice(deviceId, isOn ? '0' : '1', user.token)
+      setIsOn(updated.command === '1')
+      if (isSensor) {
+        const recentHistory = await getAllLog(deviceId, user.token)
+        setHistory(filterAndSortHistory(recentHistory))
+      } else {
+        const recentHistory = await getDeviceCommandHistory(
+          deviceId,
+          user.token
+        )
+        setHistory(filterAndSortHistory(recentHistory))
       }
-      const updated = await toggleDevice(
-        deviceId,
-        fanSpeed ? fanSpeed.toString() : isOn ? '0' : '1',
-        user.token
-      )
-      setIsOn(updated.command === '1' || updated.command === '100')
-      const recentHistory = await getDeviceCommandHistory(deviceId, user.token)
-      setHistory(filterAndSortHistory(recentHistory))
       if (isSensor) {
         await fetchSensorLogs()
       }
     } catch (err) {
-      console.error('Toggle thất bại:', err)
+      console.error('Bật/tắt thất bại:', err)
     }
   }
+
+  // Handle fan speed change
+  const handleFanSpeedChange = async (value: number) => {
+    if (!user?.token) return
+    try {
+      const updated = await toggleDevice(deviceId, value.toString(), user.token)
+      const recentHistory = await getDeviceCommandHistory(deviceId, user.token)
+      setHistory(filterAndSortHistory(recentHistory))
+    } catch (err) {
+      console.error('Không thể cập nhật tốc độ quạt:', err)
+    }
+  }
+
+  const debouncedFanSpeedChange = useRef(
+    debounce((value: number) => {
+      if (value == fanSpeed) {
+        return
+      }
+      setFanSpeed(value)
+      setTimeout(handleFanSpeedChange, 5000, value)
+    }, 1000)
+  ).current
 
   // Fetch sensor logs
   const fetchSensorLogs = async () => {
@@ -144,8 +195,6 @@ const DeviceDetail = () => {
     try {
       const logsData = await getAllLog(deviceId, user.token)
       setSensorLogs(logsData)
-
-      // Process logs immediately after fetching
       if (logsData && logsData.length > 0) {
         processLogsData(logsData)
       } else {
@@ -192,6 +241,7 @@ const DeviceDetail = () => {
     })
 
     setProcessedLogs({ labels, values })
+
     // Create the full chart data
     const fullData = {
       labels,
@@ -290,11 +340,9 @@ const DeviceDetail = () => {
     const loadData = async () => {
       setIsLoading(true)
       await fetchData()
-
       if (isSensor) {
         await fetchSensorLogs()
       }
-
       setIsLoading(false)
     }
     loadData()
@@ -312,12 +360,28 @@ const DeviceDetail = () => {
     <View style={styles.container}>
       <Text style={styles.title}>{deviceName}</Text>
 
-      <View style={styles.statusRow}>
-        <Text style={{ marginRight: 10 }}>
-          Trạng thái: {isOn ? 'Bật' : 'Tắt'}
-        </Text>
-        <Switch value={isOn} onValueChange={handleToggle} />
-      </View>
+      {isFan ? (
+        <View style={styles.fanContainer}>
+          <Text style={styles.fanLabel}>Tốc độ quạt: {fanSpeed}%</Text>
+          <Slider
+            style={{ width: Dimensions.get('window').width - 40, height: 40 }}
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={fanSpeed}
+            minimumTrackTintColor="#2196F3"
+            maximumTrackTintColor="#d3d3d3"
+            onValueChange={debouncedFanSpeedChange}
+          />
+        </View>
+      ) : !isSensor ? (
+        <View style={styles.statusRow}>
+          <Text style={{ marginRight: 10 }}>
+            Trạng thái: {isOn ? 'Bật' : 'Tắt'}
+          </Text>
+          <Switch value={isOn} onValueChange={handleToggle} />
+        </View>
+      ) : null}
 
       {isSensor && (
         <View style={styles.chartContainer}>
@@ -396,8 +460,12 @@ const DeviceDetail = () => {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <Text>
-            {item.command === '1' ? 'Bật' : 'Tắt'} lúc{' '}
-            {new Date(item.created_at).toLocaleString()}
+            {isFan || isSensor
+              ? `Giá trị: ${item.value || item.command}`
+              : item.command === '1'
+              ? 'Bật'
+              : 'Tắt'}{' '}
+            lúc {new Date(item.created_at).toLocaleString().padStart(2, '0')}
           </Text>
         )}
       />
@@ -472,6 +540,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontStyle: 'italic',
+  },
+  fanContainer: {
+    marginTop: 20,
+  },
+  fanLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
   },
 })
 
