@@ -9,6 +9,7 @@ import {
   Switch,
   ActivityIndicator,
   StyleSheet,
+  Image,
 } from 'react-native'
 import { Picker } from '@react-native-picker/picker'
 import {
@@ -302,7 +303,7 @@ export default function Devices() {
     }
   }
 
-  // Render từng phòng
+  // Cập nhật phần renderRoomItem
   const renderRoomItem = ({ item }: { item: Room }) => (
     <View style={styles.roomContainer}>
       <TouchableOpacity
@@ -317,12 +318,33 @@ export default function Devices() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {item.devices.map((device: Device) => {
           const isFan = device.name.toLowerCase().includes('fan')
-          const isSensor =
-            device.name.toLowerCase().includes('sensor') ||
-            device.name.toLowerCase().includes('thermostat')
+          const isSensor = device.name.toLowerCase().includes('sensor')
+          const isThermostat = device.name.toLowerCase().includes('thermostat')
+          const isDoor =
+            device.name.toLowerCase().includes('door') ||
+            (device.type && device.type.toLowerCase().includes('door'))
+
+          // Xác định loại thiết bị để hiển thị hình ảnh phù hợp
+          let deviceImage
+          if (isFan) {
+            deviceImage = require('../assets/images/my-fan.jpeg')
+          } else if (isThermostat) {
+            deviceImage = require('../assets/images/my-thermostat.jpeg')
+          } else if (isSensor) {
+            deviceImage = require('../assets/images/my-sensor.jpeg')
+          } else if (isDoor) {
+            deviceImage = require('../assets/images/my-door.jpeg')
+          } else {
+            deviceImage = require('../assets/images/my-device.jpeg') // Default image
+          }
+
           return (
             <View key={device.id} style={styles.deviceCard}>
               <TouchableOpacity
+                style={{
+                  width: '100%',
+                  alignItems: 'center',
+                }}
                 onPress={() =>
                   navigation.navigate('DeviceDetail', {
                     deviceId: device.id.toString(),
@@ -330,24 +352,31 @@ export default function Devices() {
                   })
                 }
               >
-                <Text>{device.name}</Text>
+                <Text style={styles.deviceName}>{device.name}</Text>
+
+                {/* Hiển thị hình ảnh thiết bị */}
+                <Image source={deviceImage} style={styles.deviceImage} />
+
+                {/* Hiển thị thông tin tương ứng với loại thiết bị */}
+                {isFan ? (
+                  <Text style={styles.fanValue}>
+                    Tốc độ: {device.speed ?? 0}%
+                  </Text>
+                ) : isSensor || isThermostat ? (
+                  <Text style={styles.sensorValue}>
+                    Giá trị: {device.latestSensorValue ?? '--'}
+                  </Text>
+                ) : (
+                  <View style={styles.switchContainer}>
+                    <Switch
+                      value={device.isOn}
+                      onValueChange={(newValue) =>
+                        handleToggleDevice(device.id.toString(), newValue)
+                      }
+                    />
+                  </View>
+                )}
               </TouchableOpacity>
-              {isFan ? (
-                <Text style={{ color: '#007AFF', fontWeight: 'bold' }}>
-                  Tốc độ: {device.speed ?? 0}%
-                </Text>
-              ) : isSensor ? (
-                <Text style={{ color: '#FF9500', fontWeight: 'bold' }}>
-                  Giá trị: {device.latestSensorValue ?? '--'}
-                </Text>
-              ) : (
-                <Switch
-                  value={device.isOn}
-                  onValueChange={(newValue) =>
-                    handleToggleDevice(device.id.toString(), newValue)
-                  }
-                />
-              )}
             </View>
           )
         })}
@@ -458,18 +487,53 @@ const styles = StyleSheet.create({
   roomContainer: { padding: 10 },
   roomTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   deviceCard: {
-    padding: 10,
+    padding: 15,
     backgroundColor: '#fff',
     marginRight: 10,
     borderRadius: 10,
     alignItems: 'center',
+    width: 150,
+    minHeight: 150,
+    shadowColor: '#fff',
+    shadowOpacity: 0,
   },
-  deviceName: { fontSize: 14 },
+  deviceName: {
+    fontSize: 14,
+    textAlign: 'center',
+    fontWeight: '500',
+    marginBottom: 10,
+  },
+  deviceImage: {
+    width: 80,
+    height: 80,
+    resizeMode: 'contain',
+    marginVertical: 10,
+  },
+  deviceValue: {
+    fontWeight: 'bold',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  fanValue: {
+    color: '#007AFF',
+    fontWeight: 'bold',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  sensorValue: {
+    color: '#FF9500',
+    fontWeight: 'bold',
+    marginTop: 10,
+    textAlign: 'center',
+  },
   loadingContainer: { alignItems: 'center', marginTop: 20 },
   loadingText: {
     fontSize: 11,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 10,
+  },
+  switchContainer: {
+    marginTop: 10,
   },
 })

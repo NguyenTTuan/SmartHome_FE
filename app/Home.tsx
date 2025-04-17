@@ -20,7 +20,11 @@ import { LineChart } from 'react-native-chart-kit'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 // import axios from 'axios'
 import { apiClient, useAuth } from './contexts/AuthContext'
-import { getLatestCommand, toggleDevice } from '@/utils/deviceService'
+import {
+  getAllLog,
+  getLatestCommand,
+  toggleDevice,
+} from '@/utils/deviceService'
 import { useFocusEffect } from 'expo-router'
 import { RootStackParamList } from '@/types/RootStackParamList'
 
@@ -32,23 +36,27 @@ type NavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<TabNavigatorParamList, 'Home'>
 >
 
-const fakeSensorData = [
-  { timestamp: '09:00', temperature: 25, humidity: 59 },
-  { timestamp: '10:00', temperature: 25, humidity: 60 },
-  { timestamp: '11:00', temperature: 26, humidity: 62 },
-  { timestamp: '12:00', temperature: 27, humidity: 58 },
-  { timestamp: '13:00', temperature: 28, humidity: 55 },
-  { timestamp: '14:00', temperature: 30.5, humidity: 60 },
-  { timestamp: '15:00', temperature: 29.2, humidity: 62.3 },
-  { timestamp: '16:00', temperature: 29, humidity: 67 },
-]
-
 // Định nghĩa kiểu cho Device
 interface Device {
-  id: string
+  id: number
   name: string
+  type?: string
   room: string
   isOn: boolean
+  speed?: number // cho quạt
+  latestSensorValue?: string // cho sensor
+  created_at: string
+  updated_at: string
+  srcImg?: string
+}
+
+type DeviceCommand = {
+  id: string
+  device_id: string
+  command?: string
+  value?: string
+  created_at: string
+  updated_at: string
 }
 
 // Định nghĩa kiểu cho Room
@@ -70,6 +78,27 @@ const groupDevicesByRoom = (devices: Device[]): Room[] => {
   return Object.entries(groups).map(([room, devices]) => ({ room, devices }))
 }
 
+const filterAndSortHistory = (commands: DeviceCommand[]): DeviceCommand[] => {
+  const now = new Date()
+  const _24hoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+  return commands
+    .filter((item) => {
+      const createdAt = new Date(item.created_at)
+      const isRecent = createdAt >= _24hoursAgo
+      const isNumberValue =
+        item.value !== undefined && !isNaN(parseFloat(item.value))
+      const isNumberCommand =
+        item.command !== undefined && !isNaN(parseFloat(item.command))
+
+      return isRecent && (isNumberValue || isNumberCommand)
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+}
+
 export default function Home() {
   const { user } = useAuth()
   const navigation = useNavigation<NavigationProp>()
@@ -77,8 +106,8 @@ export default function Home() {
   const [isPowerOn, setIsPowerOn] = useState(false)
   const [wheatherLoading, sethWeatherLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(true)
-  const [selectedPoint, setSelectedPoint] = useState<any>(null)
   const [rooms, setRooms] = useState<Room[]>([])
+  const [sensorDevices, setSensorDevices] = useState<Device[]>([])
 
   useEffect(() => {
     ;(async () => {
@@ -118,11 +147,17 @@ export default function Home() {
           const devicesFromApi = res.data.data
           const latestCommandsPromises = devicesFromApi.map(
             async (device: Device) => {
+              const isSensor =
+                device.name.toLowerCase().includes('sensor') ||
+                device.name.toLowerCase().includes('thermostat')
               try {
+                if (isSensor) {
+                  const res = await getAllLog(device.id.toString(), user.token)
+                  return filterAndSortHistory(res)[0]
+                }
                 return await getLatestCommand(device.id.toString(), user.token)
               } catch (error) {
-                console.warn(`No command for device ${device.id}, skipping`)
-                return null // hoặc trả về giá trị mặc định
+                return null // trả về giá trị mặc định
               }
             }
           )
@@ -130,13 +165,32 @@ export default function Home() {
           const latestCommands = await Promise.all(latestCommandsPromises)
 
           const devicesWithState = devicesFromApi.map(
-            (device: Device, index: number) => ({
-              ...device,
-              isOn: latestCommands[index]?.command === '1' ?? false,
-            })
+            (device: Device, index: number) => {
+              const latest = latestCommands[index]
+              const isFan = device.name.toLowerCase().includes('fan')
+              const isSensor =
+                device.name.toLowerCase().includes('sensor') ||
+                device.name.toLowerCase().includes('thermostat')
+
+              return {
+                ...device,
+                isOn: latest?.command === '1' ?? false,
+                speed: isFan ? parseInt(latest?.command || '0') : undefined,
+                latestSensorValue: isSensor ? latest?.value : undefined,
+              }
+            }
           )
-          const grouped = groupDevicesByRoom(devicesWithState)
-          setRooms(grouped)
+
+          const sensors = devicesWithState.filter(
+            (d: Device) =>
+              d.name.toLowerCase().includes('sensor') ||
+              d.name.toLowerCase().includes('thermostat')
+          )
+          const nonSensorDevices = devicesWithState.filter(
+            (d: Device) => !sensors.some((s: Device) => s.id === d.id)
+          )
+          setRooms(groupDevicesByRoom(nonSensorDevices))
+          setSensorDevices(sensors)
         } catch (error) {
           console.error('Error fetching devices:', error)
         } finally {
@@ -162,7 +216,7 @@ export default function Home() {
         prevRooms.map((room) => ({
           ...room,
           devices: room.devices.map((device) =>
-            device.id === deviceId
+            device.id.toString() === deviceId
               ? { ...device, isOn: updatedCommand.command === '1' }
               : device
           ),
@@ -171,22 +225,6 @@ export default function Home() {
     } catch (err) {
       console.error('Toggle failed:', err)
     }
-  }
-
-  // Prepare data for react-native-chart-kit
-  const chartData = {
-    labels: fakeSensorData.map((item) => item.timestamp),
-    datasets: [
-      {
-        data: fakeSensorData.map((item) => item.temperature),
-        color: (opacity = 1) => `rgba(255, 115, 0, ${opacity})`,
-      },
-      {
-        data: fakeSensorData.map((item) => item.humidity),
-        color: (opacity = 1) => `rgba(56, 121, 8, ${opacity})`,
-      },
-    ],
-    legend: ['Nhiệt độ (°C)', 'Độ ẩm (%)'],
   }
 
   const screenWidth = Dimensions.get('window').width
@@ -317,71 +355,91 @@ export default function Home() {
         )}
       </View>
 
-      {/* Sensor Dashboard */}
-      <View style={{ padding: 20 }} onTouchStart={() => setSelectedPoint(null)}>
-        <Text style={{ fontSize: 18, marginBottom: 10 }}>
-          Cảm biến nhiệt độ & độ ẩm
+      {/* Sensor Devices Section */}
+      <View style={{ padding: 20 }}>
+        <Text style={{ fontSize: 18, marginBottom: 10, fontWeight: 'bold' }}>
+          Các cảm biến
         </Text>
-
-        <View style={{ position: 'relative' }}>
-          <LineChart
-            data={chartData}
-            width={screenWidth - 40}
-            height={250}
-            chartConfig={{
-              backgroundColor: '#fff',
-              backgroundGradientFrom: '#fff',
-              backgroundGradientTo: '#fff',
-              decimalPlaces: 1,
-              color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              style: { borderRadius: 16 },
-              propsForDots: { r: '5', strokeWidth: '1', stroke: '#fff' },
-            }}
-            bezier
-            fromZero
-            withShadow={false}
-            onDataPointClick={({ value, index, x, y }) => {
-              setSelectedPoint({
-                x,
-                y,
-                temperature: fakeSensorData[index].temperature,
-                humidity: fakeSensorData[index].humidity,
-                label: fakeSensorData[index].timestamp,
-              })
-            }}
-          />
-
-          {/* Hiển thị tooltip khi chọn điểm */}
-          {selectedPoint && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ flexDirection: 'row' }}
+        >
+          {sensorDevices.map((device) => (
             <View
+              key={device.id}
               style={{
-                position: 'absolute',
-                top: selectedPoint.y - 40,
-                left: selectedPoint.x - 20,
-                backgroundColor: 'white',
-                padding: 5,
-                borderRadius: 5,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.2,
-                shadowRadius: 2,
-                elevation: 5,
-                zIndex: 999,
+                padding: 15,
+                backgroundColor: '#e0f7fa',
+                marginRight: 10,
+                borderRadius: 10,
+                width: 150,
+                minHeight: 200,
+                alignItems: 'center',
               }}
             >
-              <Text style={{ fontSize: 14, fontWeight: 'bold' }}>
-                {selectedPoint.label}
-              </Text>
-              <Text style={{ color: 'rgb(255, 115, 0)' }}>
-                Nhiệt độ: {selectedPoint.temperature}°C
-              </Text>
-              <Text style={{ color: 'rgb(56, 121, 8)' }}>
-                Độ ẩm: {selectedPoint.humidity}%
-              </Text>
+              <TouchableOpacity
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '100%',
+                }}
+                onPress={() =>
+                  navigation.navigate('DevicesStack', {
+                    screen: 'DeviceDetail',
+                    params: {
+                      deviceId: device.id.toString(),
+                      deviceName: device.name,
+                    },
+                  })
+                }
+              >
+                <Text
+                  style={{
+                    fontWeight: 'bold',
+                    marginBottom: 10,
+                    textAlign: 'center',
+                  }}
+                >
+                  {device.name}
+                </Text>
+
+                {device.type?.toLocaleLowerCase().includes('thermostat') ? (
+                  <Image
+                    source={require('../assets/images/my-thermostat.jpeg')}
+                    style={{
+                      width: 80,
+                      height: 80,
+                      resizeMode: 'contain',
+                      marginVertical: 10,
+                    }}
+                  />
+                ) : (
+                  <Image
+                    source={require('../assets/images/my-sensor.jpeg')}
+                    style={{
+                      width: 80,
+                      height: 80,
+                      resizeMode: 'contain',
+                      marginVertical: 10,
+                    }}
+                  />
+                )}
+
+                <Text
+                  style={{
+                    color: 'green',
+                    fontWeight: 'bold',
+                    marginTop: 10,
+                    textAlign: 'center',
+                  }}
+                >
+                  Giá trị: {device.latestSensorValue ?? '--'}
+                </Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </View>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Main Power Switch */}
@@ -401,7 +459,9 @@ export default function Home() {
             alignContent: 'center',
           }}
         >
-          <Text style={{ fontSize: 18, paddingEnd: 10 }}>Điện tổng</Text>
+          <Text style={{ fontSize: 18, paddingEnd: 10, fontWeight: 'bold' }}>
+            Điện tổng
+          </Text>
           <MaterialCommunityIcons
             name={`electric-switch${isPowerOn ? '-closed' : ''}`}
             size={24}
@@ -458,38 +518,103 @@ export default function Home() {
                 showsHorizontalScrollIndicator={false}
                 style={{ flexDirection: 'row' }}
               >
-                {roomData.devices.map((device) => (
-                  <View
-                    key={device.id}
-                    style={{
-                      padding: 10,
-                      backgroundColor: 'lightgray',
-                      marginRight: 10,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <TouchableOpacity
-                      onPress={() =>
-                        navigation.navigate('DevicesStack', {
-                          screen: 'DeviceDetail',
-                          params: {
-                            deviceId: device.id,
-                            deviceName: device.name,
-                          },
-                        })
-                      }
+                {roomData.devices.map((device) => {
+                  const isFan =
+                    device.name.toLowerCase().includes('fan') ||
+                    device.type?.toLowerCase().includes('fan')
+                  return (
+                    <View
+                      key={device.id}
+                      style={{
+                        padding: 15,
+                        backgroundColor: 'white',
+                        marginRight: 10,
+                        borderRadius: 10,
+                        width: 150,
+                        minHeight: 200,
+                        alignItems: 'center',
+                      }}
                     >
-                      <Text>{device.name}</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{
+                          alignItems: 'center',
+                          width: '100%',
+                          marginBottom: 10,
+                        }}
+                        onPress={() =>
+                          navigation.navigate('DevicesStack', {
+                            screen: 'DeviceDetail',
+                            params: {
+                              deviceId: device.id.toString(),
+                              deviceName: device.name,
+                            },
+                          })
+                        }
+                      >
+                        <Text
+                          style={{
+                            textAlign: 'center',
+                            fontWeight: '500',
+                            marginBottom: 10,
+                          }}
+                        >
+                          {device.name}
+                        </Text>
 
-                    <Switch
-                      value={device.isOn}
-                      onValueChange={(newValue) =>
-                        handleToggleDevice(device.id.toString(), newValue)
-                      }
-                    />
-                  </View>
-                ))}
+                        {isFan ? (
+                          <>
+                            <Image
+                              source={require('../assets/images/my-fan.jpeg')}
+                              style={{
+                                width: 80,
+                                height: 80,
+                                resizeMode: 'contain',
+                                marginBottom: 10,
+                              }}
+                            />
+                            <Text
+                              style={{
+                                color: '#007AFF',
+                                fontWeight: 'bold',
+                                textAlign: 'center',
+                                marginTop: 10,
+                              }}
+                            >
+                              Tốc độ: {device.speed ?? '0'}%
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Image
+                              source={
+                                device.type?.toLowerCase().includes('door')
+                                  ? require('../assets/images/my-door.jpeg')
+                                  : require('../assets/images/my-door.jpeg')
+                              }
+                              style={{
+                                width: 80,
+                                height: 80,
+                                resizeMode: 'contain',
+                                marginBottom: 10,
+                              }}
+                            />
+                            <View style={{ marginTop: 10 }}>
+                              <Switch
+                                value={device.isOn}
+                                onValueChange={(newValue) =>
+                                  handleToggleDevice(
+                                    device.id.toString(),
+                                    newValue
+                                  )
+                                }
+                              />
+                            </View>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )
+                })}
               </ScrollView>
             </View>
           ))}
