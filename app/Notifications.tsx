@@ -1,3 +1,4 @@
+//@ts-nocheck
 import React, { useState, useEffect } from 'react'
 import {
   View,
@@ -18,6 +19,8 @@ import {
 import { vi } from 'date-fns/locale'
 import { fakeNotifications } from '../api/fakeNotifications'
 import { useIsFocused } from '@react-navigation/native'
+// import useSocket from './contexts/SocketContext'
+import { socket } from '@/lib/socket'
 
 // Định nghĩa kiểu cho Notification
 interface Notification {
@@ -98,6 +101,35 @@ export default function Notifications() {
   const [page, setPage] = useState(1)
   const pageSize = 10
   const isFocused = useIsFocused()
+
+  // const socket = useSocket()
+
+  // config websocket
+
+  useEffect(() => {
+        // const handleNotification = ({id, user_id, type, header, status, description, created_at, updated_at}) => {
+        const handleNotification = (notif: any) => {
+        // TODO: push notification and re-fetch notifications
+        console.log('A noti is sent from the server')
+        console.log(notif)
+        }
+    
+        if (socket) {
+            socket.on('notification', handleNotification)
+        }
+
+        // // code if need to send message to server
+        // const interval = setInterval(() => {
+        //     console.log('Fetching notifications...')
+        //     socket.emit('get-noti', {noti: "This is a noti from fe"})
+        // }, 5 * 1000) // 5 sec
+    
+        return () => {
+            if (socket) {
+                socket.off('notification', handleNotification)
+            }
+        }
+    }, [])
 
   useEffect(() => {
     if (isFocused) {
