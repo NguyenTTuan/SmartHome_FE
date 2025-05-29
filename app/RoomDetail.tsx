@@ -122,7 +122,6 @@ export default function RoomDetail() {
           }
         )
         const latestCommands = await Promise.all(latestCommandsPromises)
-        console.log(latestCommands)
 
         // Update devices with their current state
         const devicesWithState = roomDevices.map(
@@ -207,7 +206,7 @@ export default function RoomDetail() {
                 </TouchableOpacity>
                 {isFan && (
                   <Text style={{ color: '#007AFF', marginTop: 4 }}>
-                    Gió: {item.speed ?? 0}%
+                    Tốc độ: {item.speed ?? 0}%
                   </Text>
                 )}
                 {isSensor && (
