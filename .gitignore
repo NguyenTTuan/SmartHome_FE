@@ -41,3 +41,5 @@ app-example
 android
 *.aab
 eas.json
+
+api/
