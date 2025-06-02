@@ -11,6 +11,7 @@ import { View, ActivityIndicator, Alert } from 'react-native'
 import { useNavigation } from 'expo-router'
 import { RootStackParamList } from '@/types/RootStackParamList'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import { initializeSocket, disconnectSocket } from '@/utils/socket'
 
 const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
 
@@ -53,6 +54,7 @@ export const AuthProvider = ({ children }: Props) => {
       const token = await AsyncStorage.getItem('accessToken')
       if (token) {
         setUser({ token })
+        initializeSocket(token)
       }
       setLoading(false)
     }
@@ -71,6 +73,7 @@ export const AuthProvider = ({ children }: Props) => {
     await AsyncStorage.setItem('accessToken', accessToken)
     await AsyncStorage.setItem('refreshToken', refreshToken)
     setUser({ username, token: accessToken })
+    initializeSocket(accessToken)
   }
 
   const logout = async () => {
@@ -92,6 +95,7 @@ export const AuthProvider = ({ children }: Props) => {
     await AsyncStorage.removeItem('accessToken')
     await AsyncStorage.removeItem('refreshToken')
     setUser(null)
+    disconnectSocket()
   }
 
   const refreshAccessToken = async () => {

@@ -6,6 +6,7 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native'
 import {
   format,
@@ -16,16 +17,19 @@ import {
   subWeeks,
 } from 'date-fns'
 import { vi } from 'date-fns/locale'
-import { fakeNotifications } from '../api/fakeNotifications'
 import { useIsFocused } from '@react-navigation/native'
+import { apiClient, useAuth } from './contexts/AuthContext'
+import { getSocket } from '@/utils/socket'
+
+const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
 
 // Định nghĩa kiểu cho Notification
 interface Notification {
   id: number
   title: string
   description: string
-  is_read: boolean
-  timestamp: string // ISO format
+  status: string // "unread" or "read"
+  timestamp: string
 }
 
 // Hàm nhóm thông báo theo khoảng thời gian
@@ -37,20 +41,13 @@ const groupNotifications = (notifications: Notification[]) => {
     const date = parseISO(notif.timestamp)
     let groupKey = ''
 
-    // Hôm nay (< 24h)
     if (isToday(date)) {
       groupKey = 'Hôm nay'
-    }
-    // Dưới 7 ngày
-    else if (isWithinInterval(date, { start: subDays(now, 7), end: now })) {
+    } else if (isWithinInterval(date, { start: subDays(now, 7), end: now })) {
       groupKey = 'Vài ngày trước'
-    }
-    // Dưới 4 tuần (Vài tuần trước)
-    else if (isWithinInterval(date, { start: subWeeks(now, 4), end: now })) {
+    } else if (isWithinInterval(date, { start: subWeeks(now, 4), end: now })) {
       groupKey = 'Vài tuần trước'
-    }
-    // Vài tháng trước (theo tháng cụ thể)
-    else {
+    } else {
       const month = format(date, 'MMMM yyyy', { locale: vi })
       groupKey = `Trong ${month}`
     }
@@ -70,7 +67,6 @@ const formatTimeDisplay = (timestamp: string) => {
   const now = new Date()
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 
-  // Dưới 24h
   if (isToday(date)) {
     if (diffInSeconds < 60) {
       return `${diffInSeconds} giây trước`
@@ -81,17 +77,15 @@ const formatTimeDisplay = (timestamp: string) => {
       const hours = Math.floor(diffInSeconds / 3600)
       return `${hours} giờ trước`
     }
-  }
-  // Dưới 7 ngày
-  else if (isWithinInterval(date, { start: subDays(now, 7), end: now })) {
+  } else if (isWithinInterval(date, { start: subDays(now, 7), end: now })) {
     const days = Math.floor(diffInSeconds / 86400)
     return `${days} ngày trước`
   }
-  // Các trường hợp còn lại hiển thị ngày cụ thể
   return format(date, 'dd/MM/yyyy HH:mm', { locale: vi })
 }
 
 export default function Notifications() {
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [allNotifs, setAllNotifs] = useState<Notification[]>([])
   const [viewMode, setViewMode] = useState<'all' | 'unread'>('all')
@@ -105,20 +99,59 @@ export default function Notifications() {
     }
   }, [isFocused])
 
-  const fetchNotifications = () => {
-    setLoading(true)
-    setTimeout(() => {
-      const sorted = [...fakeNotifications].sort((a, b) => {
+  // Listen for incoming notifications via WebSocket
+  useEffect(() => {
+    const socket = getSocket()
+    const handleNewNotification = (notif: Notification) => {
+      setAllNotifs((prev) => {
+        const merged = [notif, ...prev]
+        merged.sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+        return merged
+      })
+      Alert.alert(notif.title, notif.description)
+    }
+    // Only attach the listener if the socket is connected
+    if (socket && user?.token) {
+      socket.on('newNotification', handleNewNotification)
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (socket) {
+        socket.off('newNotification', handleNewNotification)
+      }
+    }
+  }, [user?.token])
+
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true)
+      if (!user || !user.token) throw new Error('No access token found')
+
+      const response = await apiClient.get(`${API_HOST}/api/v1/notifications`, {
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+        },
+      })
+
+      const data = response.data?.data || []
+      const sorted = [...data].sort((a, b) => {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       })
       setAllNotifs(sorted)
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error)
+    } finally {
       setLoading(false)
-    }, 800)
+    }
   }
 
   // Lọc thông báo theo viewMode
   const filteredNotifs = allNotifs.filter((n) =>
-    viewMode === 'unread' ? !n.is_read : true
+    viewMode === 'unread' ? !n.status : true
   )
 
   // Nhóm thông báo
@@ -159,7 +192,7 @@ export default function Notifications() {
     } else {
       const notif = item.data as Notification
       const timeText = formatTimeDisplay(notif.timestamp)
-      const isBold = !notif.is_read
+      const isBold = !notif.status
 
       return (
         <View
@@ -226,22 +259,33 @@ export default function Notifications() {
       </View>
 
       {/* Danh sách */}
-      <FlatList
-        data={paginatedData}
-        renderItem={renderItem}
-        keyExtractor={(item, index) =>
-          item.type === 'header'
-            ? `header-${index}`
-            : `item-${(item.data as Notification).id}`
-        }
-        contentContainerStyle={{ padding: 10 }}
-      />
-
-      {/* Nút Xem Thêm */}
-      {page * pageSize < displayData.length && (
-        <TouchableOpacity style={styles.loadMoreBtn} onPress={handleLoadMore}>
-          <Text style={{ color: 'white', fontWeight: '600' }}>Xem thêm</Text>
-        </TouchableOpacity>
+      {paginatedData.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Không có thông báo</Text>
+        </View>
+      ) : (
+        <>
+          <FlatList
+            data={paginatedData}
+            renderItem={renderItem}
+            keyExtractor={(item, index) =>
+              item.type === 'header'
+                ? `header-${index}`
+                : `item-${(item.data as Notification).id}`
+            }
+            contentContainerStyle={{ padding: 10 }}
+          />
+          {page * pageSize < displayData.length && (
+            <TouchableOpacity
+              style={styles.loadMoreBtn}
+              onPress={handleLoadMore}
+            >
+              <Text style={{ color: 'white', fontWeight: '600' }}>
+                Xem thêm
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
     </View>
   )
@@ -303,5 +347,15 @@ const styles = StyleSheet.create({
     margin: 10,
     borderRadius: 5,
     alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
   },
 })

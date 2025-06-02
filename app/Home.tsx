@@ -16,7 +16,6 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { TabNavigatorParamList } from '../types/TabNavigatorParamList'
 import * as Location from 'expo-location'
-import { LineChart } from 'react-native-chart-kit'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 // import axios from 'axios'
 import { apiClient, useAuth } from './contexts/AuthContext'
@@ -468,7 +467,7 @@ export default function Home() {
             color="black"
           />
         </View>
-        <Switch value={isPowerOn} onValueChange={setIsPowerOn} />
+        {/* <Switch value={isPowerOn} onValueChange={setIsPowerOn} /> */}
       </View>
 
       {/* Room Devices */}

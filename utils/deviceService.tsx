@@ -61,5 +61,6 @@ export const getAllLog = async (deviceId: string, token: string) => {
     return diffDays <= 1
   })
 
-  return logsInDay
+  return logs
+  // return logsInDay
 }

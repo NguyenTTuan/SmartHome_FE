@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   TouchableOpacity,
+  KeyboardAvoidingView,
 } from 'react-native'
 import axios, { AxiosError } from 'axios'
 import { useAuth } from './contexts/AuthContext'
@@ -51,36 +52,38 @@ export default function Register() {
   }
 
   return (
-    <View style={styles.container}>
-      <Image
-        source={require('../assets/images/smarthome-logo.png')}
-        style={styles.logo}
-      />
-      <TextInput
-        placeholder="Tên đăng nhập"
-        value={username}
-        onChangeText={setUsername}
-        style={styles.input}
-      />
-      <TextInput
-        placeholder="Mật khẩu"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-      />
-      <TextInput
-        placeholder="Nhập lại mật khẩu"
-        secureTextEntry
-        value={check_password}
-        onChangeText={setCheckPassword}
-        style={styles.input}
-      />
-      <Button title="Đăng ký" onPress={handleRegister} />
-      <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-        <Text style={styles.loginText}>Đăng nhập</Text>
-      </TouchableOpacity>
-    </View>
+    <KeyboardAvoidingView style={{ flex: 1 }}>
+      <View style={styles.container}>
+        <Image
+          source={require('../assets/images/smarthome-logo.png')}
+          style={styles.logo}
+        />
+        <TextInput
+          placeholder="Tên đăng nhập"
+          value={username}
+          onChangeText={setUsername}
+          style={styles.input}
+        />
+        <TextInput
+          placeholder="Mật khẩu"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+          style={styles.input}
+        />
+        <TextInput
+          placeholder="Nhập lại mật khẩu"
+          secureTextEntry
+          value={check_password}
+          onChangeText={setCheckPassword}
+          style={styles.input}
+        />
+        <Button title="Đăng ký" onPress={handleRegister} />
+        <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <Text style={styles.loginText}>Đăng nhập</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   )
 }
 

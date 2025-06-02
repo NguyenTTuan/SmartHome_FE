@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native'
 import { useAuth } from './contexts/AuthContext'
 import { useNavigation } from '@react-navigation/native'
@@ -36,29 +37,31 @@ export default function Login() {
   }
 
   return (
-    <View style={styles.container}>
-      <Image
-        source={require('../assets/images/smarthome-logo.png')}
-        style={styles.logo}
-      />
-      <TextInput
-        placeholder="Tên đăng nhập"
-        value={username}
-        onChangeText={setUsername}
-        style={styles.input}
-      />
-      <TextInput
-        placeholder="Mật khẩu"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-      />
-      <Button title="Đăng nhập" onPress={handleLogin} />
-      <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-        <Text style={styles.registerText}>Chưa có tài khoản? Đăng ký</Text>
-      </TouchableOpacity>
-    </View>
+    <KeyboardAvoidingView style={{ flex: 1 }}>
+      <View style={styles.container}>
+        <Image
+          source={require('../assets/images/smarthome-logo.png')}
+          style={styles.logo}
+        />
+        <TextInput
+          placeholder="Tên đăng nhập"
+          value={username}
+          onChangeText={setUsername}
+          style={styles.input}
+        />
+        <TextInput
+          placeholder="Mật khẩu"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+          style={styles.input}
+        />
+        <Button title="Đăng nhập" onPress={handleLogin} />
+        <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+          <Text style={styles.registerText}>Chưa có tài khoản? Đăng ký</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   )
 }
 
