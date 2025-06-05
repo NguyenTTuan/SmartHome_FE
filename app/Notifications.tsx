@@ -23,6 +23,7 @@ import { vi } from 'date-fns/locale'
 import { useIsFocused } from '@react-navigation/native'
 import { apiClient, useAuth } from './contexts/AuthContext'
 import { getSocket, getSocketStatus } from '@/utils/socket'
+import { useNotificationContext } from './contexts/NotificationContext'
 
 const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 
@@ -123,6 +124,7 @@ export default function Notifications() {
   const [modalVisible, setModalVisible] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null)
+  const { checkUnreadNotifications } = useNotificationContext()
 
   const pageSize = 10
   const isFocused = useIsFocused()
@@ -258,6 +260,7 @@ export default function Notifications() {
 
       setAllNotifs(sorted)
       setLastFetchTime(new Date())
+      checkUnreadNotifications()
     } catch (error) {
       console.error('Failed to fetch notifications:', error)
       if (!silent) {
@@ -301,6 +304,7 @@ export default function Notifications() {
         'Thành công',
         `Đã ${status === 'read' ? 'đánh dấu đã đọc' : 'đánh dấu chưa đọc'}`
       )
+      checkUnreadNotifications()
     } catch (error) {
       console.error('Failed to update notification status:', error)
       Alert.alert('Lỗi', 'Không thể cập nhật trạng thái thông báo')
@@ -331,6 +335,7 @@ export default function Notifications() {
       }
 
       Alert.alert('Thành công', 'Đã xóa thông báo')
+      checkUnreadNotifications()
     } catch (error) {
       console.error('Failed to delete notification:', error)
       Alert.alert('Lỗi', 'Không thể xóa thông báo')

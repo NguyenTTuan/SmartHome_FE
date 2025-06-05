@@ -5,6 +5,7 @@ import { Platform, Alert } from 'react-native'
 import { StatusBar } from 'react-native'
 import RootStack from './layouts/RootStack'
 import { AuthProvider, apiClient } from './contexts/AuthContext'
+import { NotificationProvider } from './contexts/NotificationContext'
 import { getSocket } from '@/utils/socket'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Notification } from './Notifications'
@@ -147,8 +148,10 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <StatusBar barStyle="default" backgroundColor="#2196F3" />
-      <RootStack />
+      <NotificationProvider>
+        <StatusBar barStyle="default" backgroundColor="#2196F3" />
+        <RootStack />
+      </NotificationProvider>
     </AuthProvider>
   )
 }

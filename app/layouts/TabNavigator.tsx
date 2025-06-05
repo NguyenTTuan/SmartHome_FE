@@ -9,8 +9,28 @@ import Settings from './../Settings'
 import CustomHeader from './CustomHeader'
 import { TabNavigatorParamList } from '../../types/TabNavigatorParamList'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { useNotificationContext } from '../contexts/NotificationContext'
+import { StyleSheet, View } from 'react-native'
 
 const Tab = createBottomTabNavigator<TabNavigatorParamList>()
+
+// Custom component for notification icon with badge
+const NotificationIconWithBadge = ({
+  color,
+  size,
+}: {
+  color: string
+  size: number
+}) => {
+  const { hasUnreadNotifications } = useNotificationContext()
+
+  return (
+    <View style={styles.iconContainer}>
+      <Ionicons name="notifications-outline" size={size} color={color} />
+      {hasUnreadNotifications && <View style={styles.badge} />}
+    </View>
+  )
+}
 
 const TabNavigator = () => {
   return (
@@ -33,7 +53,7 @@ const TabNavigator = () => {
               <MaterialCommunityIcons name="cctv" size={size} color={color} />
             )
           else if (route.name === 'Notifications')
-            return <Ionicons name="notifications" size={size} color={color} />
+            return <NotificationIconWithBadge color={color} size={size} />
           else if (route.name === 'Settings')
             return <Ionicons name="settings" size={size} color={color} />
         },
@@ -72,5 +92,20 @@ const TabNavigator = () => {
     </Tab.Navigator>
   )
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF3B30',
+  },
+})
 
 export default TabNavigator
