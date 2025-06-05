@@ -22,6 +22,7 @@ Notifications.setNotificationHandler({
 
 export default function App() {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null)
+  const [isSocketConnected, setIsSocketConnected] = useState(false)
 
   useEffect(() => {
     registerForPushNotificationsAsync().then((token) => setExpoPushToken(token))
@@ -42,8 +43,9 @@ export default function App() {
         console.log('User interacted with notification:', response)
       })
 
-    // Listen for socket notifications and trigger push notifications
+    // Socket setup and notification handling
     const socket = getSocket()
+
     const handleSocketNotification = (data: any) => {
       console.log('🔔 Socket notification received:', data)
       if (data.header && data.description) {
@@ -58,16 +60,37 @@ export default function App() {
       }
     }
 
+    const handleSocketConnect = () => {
+      console.log('🔗 Socket connected - stopping polling')
+      setIsSocketConnected(true)
+    }
+
+    const handleSocketDisconnect = () => {
+      console.log('❌ Socket disconnected - starting polling')
+      setIsSocketConnected(false)
+    }
+
+    // Socket event listeners
+    socket.on('connect', handleSocketConnect)
+    socket.on('disconnect', handleSocketDisconnect)
     socket.on('notification', handleSocketNotification)
     socket.on('newNotification', handleSocketNotification)
 
-    // Poll every 30 seconds
-    const pollInterval = setInterval(async () => {
+    // Set initial connection status
+    setIsSocketConnected(socket.connected)
+
+    // Polling function - only runs when socket is disconnected
+    const pollForNotifications = async () => {
+      if (isSocketConnected) {
+        console.log('⏭️ Skipping poll - socket is connected')
+        return
+      }
+
       try {
         const token = await AsyncStorage.getItem('accessToken')
-
         if (!token) throw new Error('No access token found')
 
+        console.log('📡 Polling for notifications (socket disconnected)')
         const response = await apiClient.get(
           `${API_HOST}/api/v1/notifications`,
           {
@@ -88,6 +111,7 @@ export default function App() {
           const lastNotificationId = await AsyncStorage.getItem(
             'lastNotificationId'
           )
+
           if (latest.id !== lastNotificationId && latest.status === 'unread') {
             await AsyncStorage.setItem('lastNotificationId', latest.id)
 
@@ -105,16 +129,21 @@ export default function App() {
       } catch (error) {
         console.log('Polling error:', error)
       }
-    }, 30000)
+    }
+
+    // Poll every 30 seconds (but only when socket is disconnected)
+    const pollInterval = setInterval(pollForNotifications, 30000)
 
     return () => {
       clearInterval(pollInterval)
       notificationReceivedSubscription.remove()
       notificationResponseSubscription.remove()
+      socket.off('connect', handleSocketConnect)
+      socket.off('disconnect', handleSocketDisconnect)
       socket.off('notification', handleSocketNotification)
       socket.off('newNotification', handleSocketNotification)
     }
-  }, [])
+  }, [isSocketConnected]) // Re-run effect when socket connection status changes
 
   return (
     <AuthProvider>

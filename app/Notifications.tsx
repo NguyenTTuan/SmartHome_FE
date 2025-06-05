@@ -23,7 +23,6 @@ import { vi } from 'date-fns/locale'
 import { useIsFocused } from '@react-navigation/native'
 import { apiClient, useAuth } from './contexts/AuthContext'
 import { getSocket, getSocketStatus } from '@/utils/socket'
-import Constants from 'expo-constants'
 
 const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 
