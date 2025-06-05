@@ -1,6 +1,7 @@
 import { apiClient } from '@/app/contexts/AuthContext'
+import Constants from 'expo-constants'
 
-const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
+const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 const AUTH_HEADER = (token: string) => ({
   headers: { Authorization: `Bearer ${token}` },
 })

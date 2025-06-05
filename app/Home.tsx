@@ -26,9 +26,11 @@ import {
 } from '@/utils/deviceService'
 import { useFocusEffect } from 'expo-router'
 import { RootStackParamList } from '@/types/RootStackParamList'
+import Constants from 'expo-constants'
 
-const WHEATHER_API_KEY = '1ab14fde88ed778777c4a12000a8dfd9'
-const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
+const API_HOST = process.env.EXPO_PUBLIC_API_HOST
+
+const WEATHER_API_KEY = process.env.EXPO_PUBLIC_WEATHER_API_KEY
 
 type NavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList, 'Main'>,
@@ -123,7 +125,7 @@ export default function Home() {
   const fetchWeather = async (lat: any, lon: any) => {
     try {
       const response = await apiClient.get(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WHEATHER_API_KEY}&units=metric`
+        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${WEATHER_API_KEY}&units=metric`
       )
       setWeather(response.data)
     } catch (error) {

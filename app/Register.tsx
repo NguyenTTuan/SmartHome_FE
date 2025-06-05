@@ -15,10 +15,11 @@ import { useAuth } from './contexts/AuthContext'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RootStackParamList } from '../types/RootStackParamList'
+import Constants from 'expo-constants'
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Register'>
 
-const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
+const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 const API = `${API_HOST}/api/v1/access`
 
 export default function Register() {

@@ -12,8 +12,9 @@ import { useNavigation } from 'expo-router'
 import { RootStackParamList } from '@/types/RootStackParamList'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { initializeSocket, disconnectSocket } from '@/utils/socket'
+import Constants from 'expo-constants'
 
-const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
+const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 
 type User = {
   username?: string

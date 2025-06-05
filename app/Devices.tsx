@@ -27,9 +27,8 @@ import {
   toggleDevice,
 } from '../utils/deviceService'
 import { useFocusEffect } from 'expo-router'
-// import axios from 'axios'
 
-const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
+const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 
 type NavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<TabNavigatorParamList, 'Devices'>,

@@ -27,7 +27,7 @@ import { useNavigation } from 'expo-router'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RootStackParamList } from '@/types/RootStackParamList'
 
-const API_HOST = 'https://yolosmarthomeapi.ticklab.site'
+const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 
 type RoomDetailRouteProp = RouteProp<TabNavigatorParamList, 'RoomDetail'>
 type NavigationProp = CompositeNavigationProp<
