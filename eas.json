@@ -11,7 +11,8 @@
         "EXPO_PUBLIC_API_HOST": "https://yolosmarthomeapi.ticklab.site",
         "EXPO_PUBLIC_WEATHER_API_KEY": "1ab14fde88ed778777c4a12000a8dfd9",
         "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
@@ -19,7 +20,8 @@
         "EXPO_PUBLIC_API_HOST": "https://yolosmarthomeapi.ticklab.site",
         "EXPO_PUBLIC_WEATHER_API_KEY": "1ab14fde88ed778777c4a12000a8dfd9",
         "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
@@ -27,7 +29,8 @@
         "EXPO_PUBLIC_API_HOST": "https://yolosmarthomeapi.ticklab.site",
         "EXPO_PUBLIC_WEATHER_API_KEY": "1ab14fde88ed778777c4a12000a8dfd9",
         "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {
