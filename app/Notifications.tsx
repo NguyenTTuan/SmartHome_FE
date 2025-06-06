@@ -151,8 +151,6 @@ export default function Notifications() {
     const socket = getSocket()
 
     const handleNewNotification = (notif: Notification) => {
-      console.log('handleNewNotification ----- ', notif)
-
       // Update notifications list
       setAllNotifs((prev) => {
         const merged = [notif, ...prev]

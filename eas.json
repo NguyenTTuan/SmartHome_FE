@@ -10,7 +10,9 @@
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://yolosmarthomeapi.ticklab.site",
         "EXPO_PUBLIC_WEATHER_API_KEY": "1ab14fde88ed778777c4a12000a8dfd9",
-        "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site"
+        "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://4f8f905c3947d0bcd408b1848b91b432@o4509433900564482.ingest.us.sentry.io/4509449993584640",
+        "SENTRY_AUTH_TOKEN": "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"
       },
       "channel": "development"
     },
@@ -19,7 +21,9 @@
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://yolosmarthomeapi.ticklab.site",
         "EXPO_PUBLIC_WEATHER_API_KEY": "1ab14fde88ed778777c4a12000a8dfd9",
-        "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site"
+        "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://4f8f905c3947d0bcd408b1848b91b432@o4509433900564482.ingest.us.sentry.io/4509449993584640",
+        "SENTRY_AUTH_TOKEN": "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"
       },
       "channel": "preview"
     },
@@ -28,7 +32,9 @@
       "env": {
         "EXPO_PUBLIC_API_HOST": "https://yolosmarthomeapi.ticklab.site",
         "EXPO_PUBLIC_WEATHER_API_KEY": "1ab14fde88ed778777c4a12000a8dfd9",
-        "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site"
+        "EXPO_PUBLIC_SOCKET_URL": "wss://yolosmarthomeapi.ticklab.site",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://4f8f905c3947d0bcd408b1848b91b432@o4509433900564482.ingest.us.sentry.io/4509449993584640",
+        "SENTRY_AUTH_TOKEN": "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"
       },
       "channel": "production"
     }

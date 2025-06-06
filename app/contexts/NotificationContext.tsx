@@ -51,13 +51,12 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       })
 
       const notifications = response.data.data
-      console.log(notifications)
       const hasUnread = notifications.some(
         (notification: any) => notification.status === 'unread'
       )
       setHasUnreadNotifications(hasUnread)
     } catch (error) {
-      console.log('Error checking unread notifications:', error)
+      console.error('Error checking unread notifications:', error)
     }
   }
 

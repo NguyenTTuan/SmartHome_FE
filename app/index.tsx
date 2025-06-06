@@ -1,7 +1,7 @@
 import React from 'react'
 import * as Notifications from 'expo-notifications'
 import { useEffect, useState } from 'react'
-import { Platform, Alert } from 'react-native'
+import { Platform, Alert, Button } from 'react-native'
 import { StatusBar } from 'react-native'
 import RootStack from './layouts/RootStack'
 import { AuthProvider, apiClient } from './contexts/AuthContext'
@@ -9,8 +9,15 @@ import { NotificationProvider } from './contexts/NotificationContext'
 import { getSocket } from '@/utils/socket'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Notification } from './Notifications'
+import * as Sentry from '@sentry/react-native'
 
 const API_HOST = process.env.EXPO_PUBLIC_API_HOST
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+})
 
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
@@ -21,7 +28,7 @@ Notifications.setNotificationHandler({
   }),
 })
 
-export default function App() {
+const App = () => {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null)
   const [isSocketConnected, setIsSocketConnected] = useState(false)
 
@@ -128,7 +135,7 @@ export default function App() {
           }
         }
       } catch (error) {
-        console.log('Polling error:', error)
+        console.error('Polling error:', error)
       }
     }
 
@@ -150,6 +157,7 @@ export default function App() {
     <AuthProvider>
       <NotificationProvider>
         <StatusBar barStyle="default" backgroundColor="#2196F3" />
+
         <RootStack />
       </NotificationProvider>
     </AuthProvider>
@@ -186,3 +194,5 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
 
   return token
 }
+
+export default Sentry.wrap(App)

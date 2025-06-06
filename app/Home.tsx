@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  Button,
 } from 'react-native'
 import {
   CompositeNavigationProp,
@@ -26,7 +27,7 @@ import {
 } from '@/utils/deviceService'
 import { useFocusEffect } from 'expo-router'
 import { RootStackParamList } from '@/types/RootStackParamList'
-import Constants from 'expo-constants'
+import * as Sentry from '@sentry/react-native'
 
 const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 
@@ -233,6 +234,7 @@ export default function Home() {
   return (
     <ScrollView style={{ flex: 1, padding: 0 }}>
       {/* Weather Section */}
+
       <View
         style={{
           padding: 20,

@@ -54,6 +54,14 @@
         {
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "smarthome-yolo",
+          "organization": "le-hong-phuc"
+        }
       ]
     ],
     "experiments": {
