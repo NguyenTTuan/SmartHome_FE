@@ -344,12 +344,16 @@ export default function Devices() {
                   width: '100%',
                   alignItems: 'center',
                 }}
-                onPress={() =>
-                  navigation.navigate('DeviceDetail', {
-                    deviceId: device.id.toString(),
-                    deviceName: device.name.toString(),
-                  })
-                }
+                onPress={() => {
+                  try {
+                    navigation.navigate('DeviceDetail', {
+                      deviceId: device.id.toString(),
+                      deviceName: device.name.toString(),
+                    })
+                  } catch (err) {
+                    console.error('Navigation to DeviceDetail failed:', err)
+                  }
+                }}
               >
                 <Text style={styles.deviceName}>{device.name}</Text>
 

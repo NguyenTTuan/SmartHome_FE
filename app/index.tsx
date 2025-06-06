@@ -10,6 +10,7 @@ import { getSocket } from '@/utils/socket'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Notification } from './Notifications'
 import * as Sentry from '@sentry/react-native'
+import * as Updates from 'expo-updates'
 
 const API_HOST = process.env.EXPO_PUBLIC_API_HOST
 Sentry.init({
@@ -32,6 +33,26 @@ const App = () => {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null)
   const [isSocketConnected, setIsSocketConnected] = useState(false)
 
+  useEffect(() => {
+    async function checkForUpdate() {
+      if (!__DEV__) {
+        // Only check for updates in production
+        try {
+          const update = await Updates.checkForUpdateAsync()
+          if (update.isAvailable) {
+            await Updates.fetchUpdateAsync()
+            await Updates.reloadAsync()
+          }
+        } catch (e) {
+          console.error('Failed to check for updates', e)
+        }
+      } else {
+        console.log('Skipping update check in development (Expo Go)')
+      }
+    }
+
+    checkForUpdate()
+  }, [])
   useEffect(() => {
     registerForPushNotificationsAsync().then((token) => setExpoPushToken(token))
 

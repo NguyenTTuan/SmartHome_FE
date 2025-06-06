@@ -544,15 +544,22 @@ export default function Home() {
                           width: '100%',
                           marginBottom: 10,
                         }}
-                        onPress={() =>
-                          navigation.navigate('DevicesStack', {
-                            screen: 'DeviceDetail',
-                            params: {
-                              deviceId: device.id.toString(),
-                              deviceName: device.name,
-                            },
-                          })
-                        }
+                        onPress={() => {
+                          try {
+                            navigation.navigate('DevicesStack', {
+                              screen: 'DeviceDetail',
+                              params: {
+                                deviceId: device.id.toString(),
+                                deviceName: device.name.toString(),
+                              },
+                            })
+                          } catch (err) {
+                            console.error(
+                              'Navigation to DeviceDetail failed:',
+                              err
+                            )
+                          }
+                        }}
                       >
                         <Text
                           style={{

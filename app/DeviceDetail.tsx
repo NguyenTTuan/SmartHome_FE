@@ -1,32 +1,32 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View,
   Text,
-  Button,
   Switch,
-  FlatList,
+  Button,
   ActivityIndicator,
-  StyleSheet,
+  FlatList,
   Dimensions,
-  ScrollView,
-  PanResponder,
   Animated,
+  PanResponder,
+  StyleSheet,
+  ScrollView,
+  Alert,
 } from 'react-native'
+import { RouteProp, useRoute, useNavigation } from '@react-navigation/native'
+import { LineChart } from 'react-native-chart-kit'
 import Slider from '@react-native-community/slider'
-import { RouteProp, useRoute } from '@react-navigation/native'
+import { debounce } from 'lodash'
+import { TabNavigatorParamList } from '@/types/TabNavigatorParamList'
+import { useAuth } from './contexts/AuthContext'
 import {
+  getAllLog,
+  getDeviceCommandHistory,
   getLatestCommand,
   toggleDevice,
-  getDeviceCommandHistory,
-  getAllLog,
-} from '../utils/deviceService'
-import { useAuth } from './contexts/AuthContext'
-import { useNavigation } from 'expo-router'
-import { TabNavigatorParamList } from '@/types/TabNavigatorParamList'
-import { LineChart } from 'react-native-chart-kit'
-import { is } from 'date-fns/locale'
-import { debounce } from '@/utils/helpers'
+} from '@/utils/deviceService'
 
+// Update this type to match your navigation structure
 type DeviceDetailRouteProp = RouteProp<TabNavigatorParamList, 'DeviceDetail'>
 
 type DeviceCommand = {
@@ -49,6 +49,40 @@ type SensorLog = {
 type ChartDataType = {
   labels: string[]
   datasets: { data: number[] }[]
+}
+
+// Error Boundary Component for Chart
+const ChartErrorBoundary: React.FC<{
+  children: React.ReactNode
+  fallback?: React.ReactNode
+}> = ({ children, fallback }) => {
+  const [hasError, setHasError] = useState(false)
+
+  useEffect(() => {
+    setHasError(false)
+  }, [children])
+
+  if (hasError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>
+          {fallback || 'Không thể hiển thị biểu đồ. Vui lòng thử lại.'}
+        </Text>
+      </View>
+    )
+  }
+
+  try {
+    return <>{children}</>
+  } catch (error) {
+    console.error('Chart Error:', error)
+    setHasError(true)
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>Lỗi hiển thị biểu đồ</Text>
+      </View>
+    )
+  }
 }
 
 const DeviceDetail = () => {
@@ -77,7 +111,7 @@ const DeviceDetail = () => {
 
   // For swipe functionality
   const panX = useRef(new Animated.Value(0)).current
-  const swipeThreshold = 50 // Minimum swipe distance to trigger navigation
+  const swipeThreshold = 50
 
   const isSensor =
     deviceName.toLowerCase().includes('sensor') ||
@@ -86,7 +120,7 @@ const DeviceDetail = () => {
 
   const POINTS_TO_SHOW = 6
 
-  // Nếu là quạt, ta sẽ sử dụng state fanSpeed (0-100)
+  // Fan speed state
   const [fanSpeed, setFanSpeed] = useState<number>(isFan ? 50 : 0)
 
   const filterAndSortHistory = (commands: DeviceCommand[]): DeviceCommand[] => {
@@ -126,6 +160,7 @@ const DeviceDetail = () => {
         console.warn(`No latest command for device ${deviceId}:`, error)
         setIsOn(false)
       }
+
       if (isFan || isSensor) {
         const recentHistory = await getAllLog(deviceId, user.token)
         setHistory(filterAndSortHistory(recentHistory))
@@ -145,12 +180,14 @@ const DeviceDetail = () => {
   const handleToggle = async () => {
     if (!user?.token) return
     try {
-      // Dành cho thiết bị không phải quạt
-      const updated = await toggleDevice(deviceId, isOn ? '0' : '1', user.token)
+      const newCommand = isOn ? '0' : '1'
+      const updated = await toggleDevice(deviceId, newCommand, user.token)
       setIsOn(updated.command === '1')
+
       if (isSensor) {
         const recentHistory = await getAllLog(deviceId, user.token)
         setHistory(filterAndSortHistory(recentHistory))
+        await fetchSensorLogs()
       } else {
         const recentHistory = await getDeviceCommandHistory(
           deviceId,
@@ -158,11 +195,9 @@ const DeviceDetail = () => {
         )
         setHistory(filterAndSortHistory(recentHistory))
       }
-      if (isSensor) {
-        await fetchSensorLogs()
-      }
     } catch (err) {
       console.error('Bật/tắt thất bại:', err)
+      Alert.alert('Lỗi', 'Không thể thay đổi trạng thái thiết bị')
     }
   }
 
@@ -170,25 +205,24 @@ const DeviceDetail = () => {
   const handleFanSpeedChange = async (value: number) => {
     if (!user?.token) return
     try {
-      const updated = await toggleDevice(deviceId, value.toString(), user.token)
+      await toggleDevice(deviceId, value.toString(), user.token)
       const recentHistory = await getDeviceCommandHistory(deviceId, user.token)
       setHistory(filterAndSortHistory(recentHistory))
     } catch (err) {
       console.error('Không thể cập nhật tốc độ quạt:', err)
+      Alert.alert('Lỗi', 'Không thể cập nhật tốc độ quạt')
     }
   }
 
   const debouncedFanSpeedChange = useRef(
     debounce((value: number) => {
-      if (value == fanSpeed) {
-        return
-      }
+      if (value === fanSpeed) return
       setFanSpeed(value)
-      setTimeout(handleFanSpeedChange, 5000, value)
+      setTimeout(() => handleFanSpeedChange(value), 1000)
     }, 1000)
   ).current
 
-  // Fetch sensor logs
+  // Fetch sensor logs with improved error handling
   const fetchSensorLogs = async () => {
     if (!user?.token) return
     setIsLoadingChart(true)
@@ -198,16 +232,18 @@ const DeviceDetail = () => {
       if (logsData && logsData.length > 0) {
         processLogsData(logsData)
       } else {
+        setProcessedLogs({ labels: [], values: [] })
         setIsLoadingChart(false)
       }
     } catch (error) {
       console.warn(`No latest log for device ${deviceId}:`, error)
       setSensorLogs([])
+      setProcessedLogs({ labels: [], values: [] })
       setIsLoadingChart(false)
     }
   }
 
-  // Process sensor logs for chart - takes logs as parameter for immediate processing
+  // Process sensor logs for chart with improved validation
   const processLogsData = (logs: SensorLog[]) => {
     if (!logs.length) {
       setIsLoadingChart(false)
@@ -217,10 +253,21 @@ const DeviceDetail = () => {
     // Filter out logs with invalid values
     const validLogs = logs.filter((log) => {
       const value = log.value?.trim()
-      return value && !isNaN(parseFloat(value)) && value !== 'NaN'
+      if (
+        !value ||
+        value === 'null' ||
+        value === 'undefined' ||
+        value === 'NaN'
+      ) {
+        return false
+      }
+      const numValue = parseFloat(value)
+      return !isNaN(numValue) && isFinite(numValue)
     })
 
-    if (!validLogs.length) {
+    if (validLogs.length < 2) {
+      console.warn('Not enough valid data points for chart')
+      setProcessedLogs({ labels: [], values: [] })
       setIsLoadingChart(false)
       return
     }
@@ -236,73 +283,108 @@ const DeviceDetail = () => {
 
     sorted.forEach((log) => {
       const timestamp = new Date(log.created_at)
-      labels.push(`${timestamp.getHours()}:${timestamp.getMinutes()}`)
+      const hours = timestamp.getHours().toString().padStart(2, '0')
+      const minutes = timestamp.getMinutes().toString().padStart(2, '0')
+      labels.push(`${hours}:${minutes}`)
       values.push(parseFloat(log.value))
     })
 
-    setProcessedLogs({ labels, values })
-
-    // Create the full chart data
-    const fullData = {
-      labels,
-      datasets: [{ data: values }],
+    // Final validation
+    const finalValues = values.filter((val) => !isNaN(val) && isFinite(val))
+    if (finalValues.length !== values.length) {
+      console.error('Found invalid values after processing')
+      setProcessedLogs({ labels: [], values: [] })
+      setIsLoadingChart(false)
+      return
     }
 
+    setProcessedLogs({ labels, values })
     setMaxY(Math.max(...values))
     setMinY(Math.min(...values))
 
-    setFullChartData(fullData)
-
-    // Set initial visible data (6 most recent points)
+    // Set initial visible data (most recent points)
     const startIndex = Math.max(0, labels.length - POINTS_TO_SHOW)
-
-    // Get 6 points from the specified startIndex
-    const visibleLabels = labels.slice(startIndex, startIndex + POINTS_TO_SHOW)
-    const visibleValues = values.slice(startIndex, startIndex + POINTS_TO_SHOW)
-
-    // Update visible chart data
-    setVisibleChartData({
-      labels: visibleLabels,
-      datasets: [{ data: [...visibleValues] }],
-    })
-
     setCurrentViewIndex(startIndex)
     setIsLoadingChart(false)
   }
 
-  // Update visible chart data based on index
-  const updateVisibleChartData = (startIndex: number) => {
-    if (!processedLogs.labels.length) return
+  // Create safe chart data with validation
+  const safeChartData = useMemo(() => {
+    if (!processedLogs.labels.length || !processedLogs.values.length) {
+      return null
+    }
 
-    // Ensure startIndex is within bounds
-    const safeStartIndex = Math.max(
+    if (processedLogs.labels.length < 2) {
+      return null
+    }
+
+    const startIndex = Math.max(
       0,
-      Math.min(startIndex, processedLogs.labels.length - POINTS_TO_SHOW)
+      Math.min(currentViewIndex, processedLogs.labels.length - POINTS_TO_SHOW)
     )
-    setCurrentViewIndex(safeStartIndex)
-
-    // Get 6 points from the specified startIndex
-    const visibleLabels = processedLogs.labels.slice(
-      safeStartIndex,
-      safeStartIndex + POINTS_TO_SHOW
-    )
-    const visibleValues = processedLogs.values.slice(
-      safeStartIndex,
-      safeStartIndex + POINTS_TO_SHOW
+    const endIndex = Math.min(
+      startIndex + POINTS_TO_SHOW,
+      processedLogs.labels.length
     )
 
-    // Update visible chart data
-    setVisibleChartData({
+    const visibleLabels = processedLogs.labels.slice(startIndex, endIndex)
+    const visibleValues = processedLogs.values.slice(startIndex, endIndex)
+
+    // Ensure we have valid data
+    if (visibleLabels.length < 2 || visibleValues.length < 2) {
+      return null
+    }
+
+    // Check for invalid values
+    const validValues = visibleValues.filter(
+      (val) => !isNaN(val) && isFinite(val)
+    )
+    if (validValues.length !== visibleValues.length) {
+      console.warn('Found invalid values in visible chart data')
+      return null
+    }
+
+    return {
       labels: visibleLabels,
-      datasets: [{ data: visibleValues }],
-    })
-  }
+      datasets: [
+        {
+          data: visibleValues,
+          strokeWidth: 2,
+        },
+      ],
+    }
+  }, [processedLogs, currentViewIndex])
 
-  // Use useMemo to recreate panResponder when processedLogs changes
+  // Update visible chart data
+  const updateVisibleChartData = useCallback(
+    (startIndex: number) => {
+      if (!processedLogs.labels.length) return
+
+      const safeStartIndex = Math.max(
+        0,
+        Math.min(startIndex, processedLogs.labels.length - POINTS_TO_SHOW)
+      )
+      setCurrentViewIndex(safeStartIndex)
+    },
+    [processedLogs.labels.length]
+  )
+
+  // Create PanResponder for chart swiping
   const panResponder = useMemo(() => {
+    if (!processedLogs.labels.length || isLoadingChart || !safeChartData) {
+      return null
+    }
+
     return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: (evt, gestureState) => {
+        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy)
+      },
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        return (
+          Math.abs(gestureState.dx) > 10 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy)
+        )
+      },
       onPanResponderGrant: () => {
         panX.setValue(0)
       },
@@ -310,61 +392,152 @@ const DeviceDetail = () => {
         useNativeDriver: false,
       }),
       onPanResponderRelease: (e, gestureState) => {
-        // If user swipes left (negative dx) -> show newer data
         if (gestureState.dx < -swipeThreshold) {
           const maxIndex = processedLogs.labels.length - POINTS_TO_SHOW
           if (currentViewIndex < maxIndex) {
-            const newIndex = Math.min(currentViewIndex + 5, maxIndex)
+            const newIndex = Math.min(currentViewIndex + 3, maxIndex)
             updateVisibleChartData(newIndex)
           }
-        }
-        // If user swipes right (positive dx) -> show older data
-        else if (gestureState.dx > swipeThreshold) {
+        } else if (gestureState.dx > swipeThreshold) {
           if (currentViewIndex > 0) {
-            const newIndex = Math.max(0, currentViewIndex - 5)
+            const newIndex = Math.max(0, currentViewIndex - 3)
             updateVisibleChartData(newIndex)
           }
         }
 
-        // Reset animation
         Animated.spring(panX, {
           toValue: 0,
           useNativeDriver: false,
         }).start()
       },
+      onPanResponderTerminationRequest: () => true,
     })
-  }, [processedLogs, currentViewIndex, updateVisibleChartData]) // Dependencies
+  }, [
+    processedLogs.labels.length,
+    currentViewIndex,
+    updateVisibleChartData,
+    isLoadingChart,
+    safeChartData,
+  ])
+
+  // Render chart with error handling
+  const renderChart = () => {
+    if (isLoadingChart) {
+      return (
+        <View style={styles.chartLoadingContainer}>
+          <ActivityIndicator size="large" color="#2196F3" />
+          <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+        </View>
+      )
+    }
+
+    if (!safeChartData) {
+      return (
+        <View style={styles.noDataContainer}>
+          <Text style={styles.noDataText}>
+            Không có đủ dữ liệu để hiển thị biểu đồ (cần ít nhất 2 điểm dữ liệu)
+          </Text>
+        </View>
+      )
+    }
+
+    return (
+      <>
+        <View style={styles.swipeInstructions}>
+          <Text style={styles.swipeText}>← Kéo để xem dữ liệu →</Text>
+        </View>
+
+        <Animated.View
+          {...(panResponder?.panHandlers || {})}
+          style={[styles.chartWrapper, { transform: [{ translateX: panX }] }]}
+        >
+          <ChartErrorBoundary>
+            <LineChart
+              key={`chart-${currentViewIndex}-${processedLogs.labels.length}`}
+              data={safeChartData}
+              width={Dimensions.get('window').width - 40}
+              height={220}
+              chartConfig={{
+                backgroundColor: '#ffffff',
+                backgroundGradientFrom: '#ffffff',
+                backgroundGradientTo: '#ffffff',
+                decimalPlaces: 1,
+                color: (opacity = 1) => `rgba(33, 150, 243, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                style: { borderRadius: 16 },
+                propsForDots: {
+                  r: '4',
+                  strokeWidth: '2',
+                  stroke: '#ff9800',
+                },
+              }}
+              bezier={true}
+              fromZero={false}
+              segments={4}
+              style={{
+                marginVertical: 8,
+                borderRadius: 16,
+              }}
+              withInnerLines={true}
+              withOuterLines={true}
+              withVerticalLabels={true}
+              withHorizontalLabels={true}
+            />
+          </ChartErrorBoundary>
+        </Animated.View>
+
+        <View style={styles.timeNavigation}>
+          <Text style={styles.navStatus}>
+            {`${currentViewIndex + 1}-${Math.min(
+              currentViewIndex + POINTS_TO_SHOW,
+              processedLogs.labels.length
+            )} / ${processedLogs.labels.length}`}
+          </Text>
+        </View>
+      </>
+    )
+  }
 
   // Fetch data on mount
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
-      await fetchData()
-      if (isSensor) {
-        await fetchSensorLogs()
+      try {
+        await fetchData()
+        if (isSensor) {
+          await fetchSensorLogs()
+        }
+      } catch (error) {
+        console.error('Error loading device data:', error)
+        Alert.alert('Lỗi', 'Không thể tải dữ liệu thiết bị')
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
     loadData()
   }, [deviceId, user, isSensor])
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
+        <Text style={styles.loadingText}>Đang tải dữ liệu thiết bị...</Text>
       </View>
     )
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+    >
       <Text style={styles.title}>{deviceName}</Text>
 
       {isFan ? (
         <View style={styles.fanContainer}>
           <Text style={styles.fanLabel}>Tốc độ quạt: {fanSpeed}%</Text>
           <Slider
-            style={{ width: Dimensions.get('window').width - 40, height: 40 }}
+            style={styles.slider}
             minimumValue={0}
             maximumValue={100}
             step={1}
@@ -376,10 +549,15 @@ const DeviceDetail = () => {
         </View>
       ) : !isSensor ? (
         <View style={styles.statusRow}>
-          <Text style={{ marginRight: 10 }}>
+          <Text style={styles.statusText}>
             Trạng thái: {isOn ? 'Bật' : 'Tắt'}
           </Text>
-          <Switch value={isOn} onValueChange={handleToggle} />
+          <Switch
+            value={isOn}
+            onValueChange={handleToggle}
+            trackColor={{ false: '#767577', true: '#81b0ff' }}
+            thumbColor={isOn ? '#f5dd4b' : '#f4f3f4'}
+          />
         </View>
       ) : null}
 
@@ -388,166 +566,221 @@ const DeviceDetail = () => {
           <Text style={styles.chartTitle}>
             Biểu đồ giá trị cảm biến (24 giờ)
           </Text>
-
-          {isLoadingChart ? (
-            <View style={styles.chartLoadingContainer}>
-              <ActivityIndicator size="large" color="#2196F3" />
-              <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
-            </View>
-          ) : visibleChartData ? (
-            <>
-              <View style={styles.swipeInstructions}>
-                <Text style={styles.swipeText}>← Kéo để xem dữ liệu →</Text>
-              </View>
-
-              <Animated.View
-                {...panResponder.panHandlers}
-                style={[
-                  styles.chartWrapper,
-                  { transform: [{ translateX: panX }] },
-                ]}
-              >
-                <LineChart
-                  data={visibleChartData}
-                  width={Dimensions.get('window').width - 40}
-                  height={220}
-                  chartConfig={{
-                    backgroundColor: '#fff',
-                    backgroundGradientFrom: '#fff',
-                    backgroundGradientTo: '#fff',
-                    decimalPlaces: 1,
-                    color: (opacity = 1) => `rgba(0, 123, 255, ${opacity})`,
-                    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                    style: { borderRadius: 16 },
-                    propsForDots: {
-                      r: '4',
-                      strokeWidth: '1',
-                      stroke: '#ffa726',
-                    },
-                  }}
-                  bezier
-                  fromZero
-                  segments={5}
-                  decorator={() => null}
-                  renderDotContent={() => null}
-                  style={{ marginVertical: 8, borderRadius: 16 }}
-                />
-              </Animated.View>
-
-              <View style={styles.timeNavigation}>
-                <Text style={styles.navStatus}>
-                  {`${currentViewIndex + 1}-${Math.min(
-                    currentViewIndex + POINTS_TO_SHOW,
-                    processedLogs.labels.length
-                  )} / ${processedLogs.labels.length}`}
-                </Text>
-              </View>
-            </>
-          ) : (
-            <Text style={styles.noDataText}>
-              Không có dữ liệu cảm biến để hiển thị.
-            </Text>
-          )}
+          {renderChart()}
         </View>
       )}
 
-      <Text style={styles.historyTitle}>Lịch sử sử dụng (trong 24 giờ):</Text>
+      <View style={styles.historyContainer}>
+        <Text style={styles.historyTitle}>Lịch sử sử dụng (trong 24 giờ):</Text>
 
-      <FlatList
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 20 }}
-        data={history}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <Text>
-            {isFan || isSensor
-              ? `Giá trị: ${item.value || item.command}`
-              : item.command === '1'
-              ? 'Bật'
-              : 'Tắt'}{' '}
-            lúc {new Date(item.created_at).toLocaleString().padStart(2, '0')}
-          </Text>
+        {history.length > 0 ? (
+          <FlatList
+            data={history}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.historyItem}>
+                <Text style={styles.historyText}>
+                  {isFan || isSensor
+                    ? `Giá trị: ${item.value || item.command}`
+                    : item.command === '1'
+                    ? 'Bật'
+                    : 'Tắt'}{' '}
+                  lúc {new Date(item.created_at).toLocaleString()}
+                </Text>
+              </View>
+            )}
+            scrollEnabled={false}
+          />
+        ) : (
+          <Text style={styles.noHistoryText}>Không có lịch sử sử dụng</Text>
         )}
-      />
-      <Button title="Quay lại" onPress={() => navigation.goBack()} />
-    </View>
+      </View>
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 30,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#333',
+  },
+  deviceId: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#666',
+  },
+  fanContainer: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  fanLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 15,
+    color: '#333',
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderThumb: {
+    backgroundColor: '#2196F3',
+  },
+  sliderTrack: {
+    height: 4,
+    borderRadius: 2,
   },
   statusRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  historyTitle: {
-    marginTop: 20,
-    fontWeight: 'bold',
-    marginBottom: 10,
+  statusText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
   },
   chartContainer: {
-    marginTop: 20,
-    minHeight: 100,
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   chartTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  chartWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  noDataText: {
-    marginTop: 20,
-    fontSize: 14,
-    color: '#666',
+    fontSize: 18,
+    fontWeight: '600',
     textAlign: 'center',
-  },
-  timeNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 5,
-  },
-  navStatus: {
-    fontSize: 12,
-    color: '#666',
+    marginBottom: 15,
+    color: '#333',
   },
   chartLoadingContainer: {
     height: 220,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: 10,
+  noDataContainer: {
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  noDataText: {
+    textAlign: 'center',
     color: '#666',
+    fontSize: 16,
+  },
+  errorContainer: {
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#ffebee',
+    borderRadius: 8,
+  },
+  errorText: {
+    color: '#c62828',
+    textAlign: 'center',
+    fontSize: 14,
   },
   swipeInstructions: {
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: 10,
   },
   swipeText: {
     fontSize: 12,
     color: '#666',
     fontStyle: 'italic',
   },
-  fanContainer: {
-    marginTop: 20,
+  chartWrapper: {
+    alignItems: 'center',
   },
-  fanLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
+  timeNavigation: {
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  navStatus: {
+    fontSize: 12,
+    color: '#666',
+  },
+  historyContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  historyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#333',
+  },
+  historyItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  historyText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  noHistoryText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    padding: 20,
+  },
+  buttonContainer: {
+    marginTop: 20,
   },
 })
 
